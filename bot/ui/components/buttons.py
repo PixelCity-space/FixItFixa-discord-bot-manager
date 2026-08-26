@@ -157,8 +157,8 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
         restarts = await lifecycle_service.restart_bot_cluster(bot_id)
         msgs = []
         for b_cfg, pid, err in restarts:
-            if err:
-                msgs.append(get_feedback(i18n, "restart_error", name=b_cfg.name, error=err))
+            if err or not pid:
+                msgs.append(get_feedback(i18n, "restart_error", name=b_cfg.name, error=err or "Unknown error"))
             else:
                 msgs.append(get_feedback(i18n, "restart_success", name=b_cfg.name, pid=pid))
                 await bot.notify_admin(get_feedback(i18n, "bot_online_log", name=b_cfg.name, id=b_cfg.id, pid=pid))
@@ -166,8 +166,16 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
 
     elif action == "stop":
         log.info(f"User {interaction.user} clicked STOP for {bot_name} ({bot_id})")
-        await lifecycle_service.stop_bot(bot_id)
-        result = get_feedback(i18n, "status_stopped")
+        stop_res = await lifecycle_service.stop_bot(bot_id)
+        if isinstance(stop_res, tuple):
+            success, err = stop_res
+        else:
+            success, err = bool(stop_res), None
+
+        if success:
+            result = get_feedback(i18n, "stop_success", name=bot_name)
+        else:
+            result = get_feedback(i18n, "stop_error", name=bot_name, error=err or "Unknown error")
 
     elif action == "update":
         log.info(f"User {interaction.user} clicked UPDATE for {bot_name} ({bot_id})")

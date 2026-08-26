@@ -29,6 +29,27 @@ async def test_management_cog_restart_command(mock_bot, mock_interaction):
     mock_bot.lifecycle_service.restart_bot_cluster.assert_awaited_once_with("b1")
     mock_interaction.followup.send.assert_awaited_once()
 
+async def test_management_cog_stop_command(mock_bot, mock_interaction):
+    mock_bot.bots["b1"] = BotConfig(id="b1", name="Bot 1", path="C:\\test", cmd="python b1.py")
+    mock_bot.lifecycle_service.stop_bot = AsyncMock(return_value=(True, None))
+    cog = ManagementCog(mock_bot)
+    await cog.stop.callback(cog, mock_interaction, bot_id="b1")
+    
+    mock_bot.lifecycle_service.stop_bot.assert_awaited_once_with("b1")
+    mock_interaction.followup.send.assert_awaited_once()
+    assert "sikeresen leállítva" in mock_interaction.followup.send.call_args[0][0]
+
+async def test_management_cog_start_command(mock_bot, mock_interaction):
+    mock_bot.bots["b1"] = BotConfig(id="b1", name="Bot 1", path="C:\\test", cmd="python b1.py")
+    mock_bot.lifecycle_service.start_bot = AsyncMock(return_value=9999)
+    mock_bot.notify_admin = AsyncMock()
+    cog = ManagementCog(mock_bot)
+    await cog.start.callback(cog, mock_interaction, bot_id="b1")
+    
+    mock_bot.lifecycle_service.start_bot.assert_awaited_once_with("b1")
+    mock_interaction.followup.send.assert_awaited_once()
+    assert "9999" in mock_interaction.followup.send.call_args[0][0]
+
 async def test_management_cog_rollback_command(mock_bot, mock_interaction):
     cog = ManagementCog(mock_bot)
     await cog.rollback.callback(cog, mock_interaction, bot_id="b1")

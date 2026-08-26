@@ -63,8 +63,8 @@ def test_bot_manager_setup_hook_loads_all_cogs(tmp_path):
         assert bot.get_cog("MonitoringCog").__class__.__name__ == "MonitoringCog"
         assert bot.get_cog("SystemCog").__class__.__name__ == "SystemCog"
 
-        # 12 slash commands registered
-        assert len(bot.tree.get_commands()) == 12
+        # 14 slash commands registered (including /stop and /start)
+        assert len(bot.tree.get_commands()) == 14
 
     asyncio.run(run())
 

@@ -71,3 +71,106 @@ def test_handle_status_interaction_channel_restricted():
         interaction.response.send_message.assert_awaited_once()
 
     asyncio.run(run())
+
+def test_handle_status_interaction_stop_success():
+    async def run():
+        interaction = MagicMock()
+        role_admin = MagicMock()
+        role_admin.id = 555
+        interaction.user = MagicMock(spec=discord.Member)
+        interaction.user.guild = MagicMock()
+        interaction.user.guild.owner_id = 99999
+        interaction.user.id = 20001
+        interaction.user.guild_permissions = MagicMock()
+        interaction.user.guild_permissions.administrator = False
+        interaction.user.roles = [role_admin]
+
+        interaction.channel_id = 111111
+        interaction.client.admin_channel_id = 111111
+        interaction.client.access_control = {"roles": {"admin": 555, "tester": 777}}
+        interaction.client.i18n = LocalizationService("hu")
+        interaction.client.lifecycle_service = MagicMock()
+        interaction.client.lifecycle_service.stop_bot = AsyncMock(return_value=(True, None))
+        interaction.client.bots = {}
+
+        interaction.response.send_message = AsyncMock()
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await handle_status_interaction(interaction, "bot1", "stop", bot_name="Iris")
+        interaction.client.lifecycle_service.stop_bot.assert_awaited_once_with("bot1")
+        sent_msg = interaction.followup.send.call_args[0][0]
+        assert "sikeresen leállítva" in sent_msg
+
+    asyncio.run(run())
+
+def test_handle_status_interaction_stop_sudo_failure():
+    async def run():
+        interaction = MagicMock()
+        role_admin = MagicMock()
+        role_admin.id = 555
+        interaction.user = MagicMock(spec=discord.Member)
+        interaction.user.guild = MagicMock()
+        interaction.user.guild.owner_id = 99999
+        interaction.user.id = 20002
+        interaction.user.guild_permissions = MagicMock()
+        interaction.user.guild_permissions.administrator = False
+        interaction.user.roles = [role_admin]
+
+        interaction.channel_id = 111111
+        interaction.client.admin_channel_id = 111111
+        interaction.client.access_control = {"roles": {"admin": 555, "tester": 777}}
+        interaction.client.i18n = LocalizationService("hu")
+        interaction.client.lifecycle_service = MagicMock()
+        sudo_err = "Passwordless sudo required. Please configure sudoers: 'username ALL=(ALL) NOPASSWD: /bin/systemctl'"
+        interaction.client.lifecycle_service.stop_bot = AsyncMock(return_value=(False, sudo_err))
+        interaction.client.bots = {}
+
+        interaction.response.send_message = AsyncMock()
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await handle_status_interaction(interaction, "bot1", "stop", bot_name="Iris")
+        interaction.client.lifecycle_service.stop_bot.assert_awaited_once_with("bot1")
+        sent_msg = interaction.followup.send.call_args[0][0]
+        assert "leállítása sikertelen" in sent_msg
+        assert "Passwordless sudo required" in sent_msg
+
+    asyncio.run(run())
+
+def test_handle_status_interaction_restart_sudo_failure():
+    async def run():
+        from core.config.models import BotConfig
+        interaction = MagicMock()
+        role_admin = MagicMock()
+        role_admin.id = 555
+        interaction.user = MagicMock(spec=discord.Member)
+        interaction.user.guild = MagicMock()
+        interaction.user.guild.owner_id = 99999
+        interaction.user.id = 20003
+        interaction.user.guild_permissions = MagicMock()
+        interaction.user.guild_permissions.administrator = False
+        interaction.user.roles = [role_admin]
+
+        interaction.channel_id = 111111
+        interaction.client.admin_channel_id = 111111
+        interaction.client.access_control = {"roles": {"admin": 555, "tester": 777}}
+        interaction.client.i18n = LocalizationService("hu")
+        interaction.client.lifecycle_service = MagicMock()
+        b_cfg = BotConfig(id="bot1", name="Iris", path="C:\\test", cmd="python iris.py")
+        sudo_err = "Cannot start systemd service 'iris': Passwordless sudo required"
+        interaction.client.lifecycle_service.restart_bot_cluster = AsyncMock(return_value=[(b_cfg, None, sudo_err)])
+        interaction.client.notify_admin = AsyncMock()
+        interaction.client.bots = {}
+
+        interaction.response.send_message = AsyncMock()
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await handle_status_interaction(interaction, "bot1", "restart", bot_name="Iris")
+        sent_msg = interaction.followup.send.call_args[0][0]
+        assert "hiba:" in sent_msg
+        assert "Passwordless sudo required" in sent_msg
+        interaction.client.notify_admin.assert_not_called()
+
+    asyncio.run(run())

@@ -50,7 +50,7 @@ class BotLifecycleService:
                 except (psutil.NoSuchProcess, psutil.ZombieProcess):
                     self.tracker.unregister(bot_id)
 
-        # Systemd check (Linux)
+        # Linux systemd
         if bot_cfg.systemd_service and os.name == 'posix':
             success = self.spawner.start_service(bot_cfg.systemd_service)
             if success:
@@ -58,6 +58,7 @@ class BotLifecycleService:
                 pid = await self.spawner.get_systemd_pid_async(bot_cfg.systemd_service)
                 if pid:
                     self.tracker.register(bot_id, pid)
+                    self.tracker.clear_manual_stop(bot_id)
                     return pid
             return None
 
@@ -65,35 +66,46 @@ class BotLifecycleService:
         pid = self.spawner.spawn(bot_cfg, env)
         if pid:
             self.tracker.register(bot_id, pid)
+            self.tracker.clear_manual_stop(bot_id)
         return pid
 
-    async def stop_bot(self, bot_id: str, clean_rogue: bool = True) -> bool:
+    async def stop_bot(self, bot_id: str, clean_rogue: bool = True) -> Tuple[bool, Optional[str]]:
         """Stops a single bot process and optionally cleans up rogue processes in its folder."""
-        self.tracker.mark_manual_stop(bot_id)
         bot_cfg = self.config.bots.get(bot_id)
+        if not bot_cfg:
+            return False, f"Bot '{bot_id}' not found in configuration"
 
         # Linux systemd
-        if bot_cfg and bot_cfg.systemd_service and os.name == 'posix':
-            await asyncio.to_thread(self.spawner.stop_service, bot_cfg.systemd_service)
+        if bot_cfg.systemd_service and os.name == 'posix':
+            stopped = await asyncio.to_thread(self.spawner.stop_service, bot_cfg.systemd_service)
+            if not stopped:
+                err = getattr(self.spawner, 'last_error', None) or f"Failed to stop systemd service '{bot_cfg.systemd_service}'"
+                log.error(f"[BotLifecycleService] Cannot stop systemd service for {bot_id}: {err}")
+                return False, err
 
         # Terminate tracked process
         proc = self.tracker.managed_processes.get(bot_id)
         if proc:
             try:
-                await self.spawner.terminate_process(proc)
+                stopped = await self.spawner.terminate_process(proc)
+                if not stopped:
+                    err = getattr(self.spawner, 'last_error', None) or f"Failed to terminate process (PID {proc.pid})"
+                    log.error(f"[BotLifecycleService] Cannot terminate process for {bot_id}: {err}")
+                    return False, err
             except (psutil.NoSuchProcess, psutil.ZombieProcess):
                 pass
             except Exception as e:
                 log.debug(f"[BotLifecycleService] Non-critical error terminating process for {bot_id}: {e}")
 
+        self.tracker.mark_manual_stop(bot_id)
         self.tracker.unregister(bot_id)
 
         # Clean rogue processes in folder (if requested)
-        if clean_rogue and bot_cfg and bot_cfg.path:
+        if clean_rogue and bot_cfg.path:
             await self.spawner.kill_rogue_processes(bot_cfg.path)
 
         await asyncio.sleep(self.spawner.restart_wait)
-        return True
+        return True, None
 
     async def restart_bot_cluster(self, bot_id: str) -> List[Tuple[BotConfig, Optional[int], Optional[str]]]:
         """Restarts the target bot and all related bots in the same folder.
@@ -112,7 +124,9 @@ class BotLifecycleService:
         # 1. Stop all bots in the cluster first
         for b in related:
             try:
-                await self.stop_bot(b.id, clean_rogue=False)
+                ok, stop_err = await self.stop_bot(b.id, clean_rogue=False)
+                if not ok:
+                    log.warning(f"[BotLifecycleService] Warning stopping bot {b.name}: {stop_err}")
             except Exception as e:
                 log.error(f"[BotLifecycleService] Error stopping bot {b.name}: {e}")
 
@@ -124,7 +138,11 @@ class BotLifecycleService:
         for b in related:
             try:
                 new_pid = await self.start_bot(b.id)
-                results.append((b, new_pid, None))
+                if new_pid:
+                    results.append((b, new_pid, None))
+                else:
+                    err = getattr(self.spawner, 'last_error', None) or "Failed to start bot process"
+                    results.append((b, None, err))
             except Exception as e:
                 log.error(f"[BotLifecycleService] Error starting bot {b.name}: {e}")
                 results.append((b, None, str(e)))

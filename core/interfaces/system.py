@@ -21,6 +21,7 @@ class IProcessSpawner(Protocol):
     stop_timeout: float
     restart_wait: float
     log_rotator: Optional[ILogRotator]
+    last_error: Optional[str]
 
     def spawn(self, bot_config: BotConfig, env: dict) -> Optional[int]: ...
     async def terminate_process(self, process: psutil.Process) -> bool: ...

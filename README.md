@@ -224,6 +224,8 @@ Commands and buttons enforce a 4-tier security boundary:
 
 | Command | Min. Role | Description |
 | :--- | :---: | :--- |
+| `/start bot_id:<ID>` | `MECHANIC` | Start a configured bot child process or systemd service. |
+| `/stop bot_id:<ID>` | `MECHANIC` | Stop a running bot child process or systemd service. |
 | `/restart bot_id:<ID>` | `MECHANIC` | Gracefully restart a managed bot subprocess. |
 | `/update bot_id:<ID>` | `MECHANIC` | Fetch latest Git commits, install pip dependencies, and reload the bot. |
 | `/rollback bot_id:<ID>` | `MECHANIC` | Revert bot repository to previous commit (`HEAD@{1}`) and restart. |

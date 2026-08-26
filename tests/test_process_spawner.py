@@ -57,3 +57,41 @@ def test_process_spawner_terminate_process_escalates_to_kill():
         mock_psutil_proc.kill.assert_called_once()
 
     asyncio.run(run())
+
+def test_process_spawner_terminate_process_access_denied():
+    async def run():
+        import psutil
+        spawner = ProcessSpawner(stop_timeout=0.2)
+        mock_psutil_proc = MagicMock()
+        mock_psutil_proc.pid = 7777
+        mock_psutil_proc.is_running.return_value = True
+        mock_psutil_proc.terminate.side_effect = psutil.AccessDenied(pid=7777)
+
+        success = await spawner.terminate_process(mock_psutil_proc)
+        assert success is False
+        assert spawner.last_error is not None
+        assert "Access denied" in spawner.last_error
+
+    asyncio.run(run())
+
+def test_process_spawner_systemd_sudo_privilege_check(monkeypatch):
+    import os
+    import subprocess
+    monkeypatch.setattr(os, "name", "posix")
+
+    # Mock subprocess.run for sudo check returning code 1 (no passwordless sudo)
+    mock_res = MagicMock()
+    mock_res.returncode = 1
+    with patch("subprocess.run", return_value=mock_res):
+        has_privs, msg = ProcessSpawner.check_systemd_privileges()
+        assert has_privs is False
+        assert "Passwordless sudo required" in msg
+
+        spawner = ProcessSpawner()
+        stopped = spawner.stop_service("iris")
+        assert stopped is False
+        assert "Passwordless sudo required" in spawner.last_error
+
+        started = spawner.start_service("iris")
+        assert started is False
+        assert "Passwordless sudo required" in spawner.last_error

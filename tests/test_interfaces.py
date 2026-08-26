@@ -90,6 +90,7 @@ def test_custom_mock_satisfies_protocol_and_can_be_injected():
         stop_timeout = 1.0
         restart_wait = 0.5
         log_rotator = None
+        last_error = None
 
         def spawn(self, bot_config, env):
             return 4242

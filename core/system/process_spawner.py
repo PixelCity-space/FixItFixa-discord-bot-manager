@@ -17,6 +17,7 @@ class ProcessSpawner:
         self.stop_timeout = stop_timeout
         self.restart_wait = restart_wait
         self.log_rotator = log_rotator
+        self.last_error: Optional[str] = None
 
     @staticmethod
     def validate_command(cmd: str) -> Tuple[bool, Optional[str]]:
@@ -35,7 +36,8 @@ class ProcessSpawner:
         """Spawns a child bot process in background, redirecting stdout/stderr to its log file."""
         is_valid, error_msg = self.validate_command(bot_config.cmd)
         if not is_valid:
-            log.error(f"[ProcessSpawner] Security rejection for bot '{bot_config.id}': {error_msg}")
+            self.last_error = f"Security rejection for bot '{bot_config.id}': {error_msg}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
 
         try:
@@ -59,33 +61,42 @@ class ProcessSpawner:
                     creationflags=creation_flags
                 )
 
+            self.last_error = None
             log.info(f"[ProcessSpawner] Spawned bot '{bot_config.name}' ({bot_config.id}) with PID: {new_proc.pid}")
             return new_proc.pid
         except FileNotFoundError as e:
-            log.error(f"[ProcessSpawner] Executable or directory not found for bot {bot_config.id} ('{bot_config.cmd}'): {e}")
+            self.last_error = f"Executable or directory not found for bot {bot_config.id} ('{bot_config.cmd}'): {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
         except PermissionError as e:
-            log.error(f"[ProcessSpawner] Permission denied spawning bot {bot_config.id}: {e}")
+            self.last_error = f"Permission denied spawning bot {bot_config.id}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
         except subprocess.SubprocessError as e:
-            log.error(f"[ProcessSpawner] Subprocess failure spawning bot {bot_config.id}: {e}")
+            self.last_error = f"Subprocess failure spawning bot {bot_config.id}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
         except OSError as e:
-            log.error(f"[ProcessSpawner] OS error spawning bot {bot_config.id}: {e}")
+            self.last_error = f"OS error spawning bot {bot_config.id}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
         except Exception as e:
-            log.error(f"[ProcessSpawner] Unexpected error spawning bot {bot_config.id}: {e}")
+            self.last_error = f"Unexpected error spawning bot {bot_config.id}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return None
 
     async def terminate_process(self, process: psutil.Process) -> bool:
         """Gracefully terminates a process, escalating to kill if necessary."""
         if not process:
+            self.last_error = None
             return True
 
         try:
             if not process.is_running():
+                self.last_error = None
                 return True
         except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            self.last_error = None
             return True
         except psutil.AccessDenied:
             log.warning(f"[ProcessSpawner] Access denied checking process PID {process.pid}")
@@ -110,14 +121,18 @@ class ProcessSpawner:
             except (psutil.NoSuchProcess, psutil.ZombieProcess):
                 pass
 
+            self.last_error = None
             return True
         except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            self.last_error = None
             return True
         except psutil.AccessDenied as e:
-            log.error(f"[ProcessSpawner] Access denied terminating PID {process.pid}: {e}")
+            self.last_error = f"Access denied terminating PID {process.pid} (insufficient permissions): {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except Exception as e:
-            log.error(f"[ProcessSpawner] Unexpected error terminating process PID {process.pid}: {e}")
+            self.last_error = f"Unexpected error terminating process PID {process.pid}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
 
     def find_all_processes_in_path(self, bot_path: str) -> List[int]:
@@ -179,65 +194,83 @@ class ProcessSpawner:
 
     def start_service(self, service_name: str) -> bool:
         if os.name != 'posix':
+            self.last_error = "Systemd is only supported on Linux/POSIX."
             return False
         has_privs, priv_msg = self.check_systemd_privileges()
         if not has_privs:
-            log.error(f"[ProcessSpawner] Cannot start systemd service '{service_name}': {priv_msg}")
+            self.last_error = f"Cannot start systemd service '{service_name}': {priv_msg}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         try:
             log.info(f"[ProcessSpawner] Starting systemd service: {service_name}")
             subprocess.run(['sudo', 'systemctl', 'start', service_name], check=True)
+            self.last_error = None
             return True
         except subprocess.CalledProcessError as e:
-            log.error(f"[ProcessSpawner] Systemctl start failed for {service_name}: exit code {e.returncode}")
+            self.last_error = f"Systemctl start failed for {service_name}: exit code {e.returncode}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except FileNotFoundError:
-            log.error(f"[ProcessSpawner] systemctl executable not found on system.")
+            self.last_error = "systemctl executable not found on system."
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except Exception as e:
-            log.error(f"[ProcessSpawner] Unexpected error starting systemd service {service_name}: {e}")
+            self.last_error = f"Unexpected error starting systemd service {service_name}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
 
     def stop_service(self, service_name: str) -> bool:
         if os.name != 'posix':
+            self.last_error = "Systemd is only supported on Linux/POSIX."
             return False
         has_privs, priv_msg = self.check_systemd_privileges()
         if not has_privs:
-            log.error(f"[ProcessSpawner] Cannot stop systemd service '{service_name}': {priv_msg}")
+            self.last_error = f"Cannot stop systemd service '{service_name}': {priv_msg}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         try:
             log.info(f"[ProcessSpawner] Stopping systemd service: {service_name}")
             subprocess.run(['sudo', 'systemctl', 'stop', service_name], check=True)
+            self.last_error = None
             return True
         except subprocess.CalledProcessError as e:
-            log.error(f"[ProcessSpawner] Systemctl stop failed for {service_name}: exit code {e.returncode}")
+            self.last_error = f"Systemctl stop failed for {service_name}: exit code {e.returncode}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except FileNotFoundError:
-            log.error(f"[ProcessSpawner] systemctl executable not found on system.")
+            self.last_error = "systemctl executable not found on system."
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except Exception as e:
-            log.error(f"[ProcessSpawner] Unexpected error stopping systemd service {service_name}: {e}")
+            self.last_error = f"Unexpected error stopping systemd service {service_name}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
 
     def restart_service(self, service_name: str) -> bool:
         if os.name != 'posix':
+            self.last_error = "Systemd is only supported on Linux/POSIX."
             return False
         has_privs, priv_msg = self.check_systemd_privileges()
         if not has_privs:
-            log.error(f"[ProcessSpawner] Cannot restart systemd service '{service_name}': {priv_msg}")
+            self.last_error = f"Cannot restart systemd service '{service_name}': {priv_msg}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         try:
             log.info(f"[ProcessSpawner] Restarting systemd service: {service_name}")
             subprocess.run(['sudo', 'systemctl', 'restart', service_name], check=True)
+            self.last_error = None
             return True
         except subprocess.CalledProcessError as e:
-            log.error(f"[ProcessSpawner] Systemctl restart failed for {service_name}: exit code {e.returncode}")
+            self.last_error = f"Systemctl restart failed for {service_name}: exit code {e.returncode}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except FileNotFoundError:
-            log.error(f"[ProcessSpawner] systemctl executable not found on system.")
+            self.last_error = "systemctl executable not found on system."
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
         except Exception as e:
-            log.error(f"[ProcessSpawner] Unexpected error restarting systemd service {service_name}: {e}")
+            self.last_error = f"Unexpected error restarting systemd service {service_name}: {e}"
+            log.error(f"[ProcessSpawner] {self.last_error}")
             return False
 
     def get_systemd_state(self, service_name: str) -> str:

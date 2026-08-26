@@ -46,12 +46,61 @@ class ManagementCog(commands.Cog):
         restarts = await self.bot.lifecycle_service.restart_bot_cluster(bot_id)
         msgs = []
         for b_cfg, pid, err in restarts:
-            if err:
-                msgs.append(get_feedback(self.bot.i18n, "restart_error", name=b_cfg.name, error=err))
+            if err or not pid:
+                msgs.append(get_feedback(self.bot.i18n, "restart_error", name=b_cfg.name, error=err or "Unknown error"))
             else:
                 msgs.append(get_feedback(self.bot.i18n, "restart_success", name=b_cfg.name, pid=pid))
                 await self.bot.notify_admin(get_feedback(self.bot.i18n, "bot_online_log", name=b_cfg.name, id=b_cfg.id, pid=pid))
         result = "\n".join(msgs)
+
+        await interaction.followup.send(result, ephemeral=False)
+
+    @app_commands.command(name="stop", description="[Bot Dev] Stop a running bot by ID.")
+    @app_commands.describe(bot_id="The ID of the bot to stop")
+    @is_admin_context()
+    @app_commands.autocomplete(bot_id=bot_id_autocomplete)
+    async def stop(self, interaction: discord.Interaction, bot_id: str):
+        log.info(f"User {interaction.user} requested /stop for bot: {bot_id}")
+        await interaction.response.defer(ephemeral=False)
+
+        if bot_id not in self.bot.bots:
+            await interaction.followup.send(get_feedback(self.bot.i18n, "error_unknown_bot"), ephemeral=True)
+            return
+
+        bot = self.bot.bots[bot_id]
+        stop_res = await self.bot.lifecycle_service.stop_bot(bot_id)
+        if isinstance(stop_res, tuple):
+            success, err = stop_res
+        else:
+            success, err = bool(stop_res), None
+
+        if success:
+            result = get_feedback(self.bot.i18n, "stop_success", name=bot.name)
+        else:
+            result = get_feedback(self.bot.i18n, "stop_error", name=bot.name, error=err or "Unknown error")
+
+        await interaction.followup.send(result, ephemeral=False)
+
+    @app_commands.command(name="start", description="[Bot Dev] Start a stopped bot by ID.")
+    @app_commands.describe(bot_id="The ID of the bot to start")
+    @is_admin_context()
+    @app_commands.autocomplete(bot_id=bot_id_autocomplete)
+    async def start(self, interaction: discord.Interaction, bot_id: str):
+        log.info(f"User {interaction.user} requested /start for bot: {bot_id}")
+        await interaction.response.defer(ephemeral=False)
+
+        if bot_id not in self.bot.bots:
+            await interaction.followup.send(get_feedback(self.bot.i18n, "error_unknown_bot"), ephemeral=True)
+            return
+
+        bot = self.bot.bots[bot_id]
+        pid = await self.bot.lifecycle_service.start_bot(bot_id)
+        if pid:
+            result = get_feedback(self.bot.i18n, "restart_success", name=bot.name, pid=pid)
+            await self.bot.notify_admin(get_feedback(self.bot.i18n, "bot_online_log", name=bot.name, id=bot.id, pid=pid))
+        else:
+            err = getattr(self.bot.spawner, 'last_error', None) or "Failed to start bot"
+            result = get_feedback(self.bot.i18n, "restart_error", name=bot.name, error=err)
 
         await interaction.followup.send(result, ephemeral=False)
 

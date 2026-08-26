@@ -153,7 +153,7 @@ def mock_bot(sample_config, mock_i18n, mock_spawner, mock_tracker, mock_git_clie
     bot.lifecycle_service = MagicMock()
     bot.lifecycle_service.restart_bot_cluster = AsyncMock(return_value=[(sample_config.bots["b1"], 12345, None)])
     bot.lifecycle_service.start_bot = AsyncMock(return_value=12345)
-    bot.lifecycle_service.stop_bot = AsyncMock(return_value=True)
+    bot.lifecycle_service.stop_bot = AsyncMock(return_value=(True, None))
 
     bot.update_service = MagicMock()
     bot.update_service.update_manager = AsyncMock(return_value=(True, "Manager updated", True, {"hash": "abcdef1", "message": "update"}))
