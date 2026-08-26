@@ -130,5 +130,8 @@ class Icons:
             # log.debug(f"[Icons]   {key} -> {getattr(cls, key)}")
 
 # Default initialization
-class DefaultConfig: emojis = {}
+class DefaultConfig:
+    emojis = {}
+
 Icons.setup(DefaultConfig())
+

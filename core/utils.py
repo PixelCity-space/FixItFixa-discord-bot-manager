@@ -1,9 +1,10 @@
-import discord
-from discord import app_commands
-from discord.ext import commands
-import os
 import logging
 from core.icons import Icons
+
+__all__ = [
+    "get_feedback",
+    "format_desc",
+]
 
 # Setup logger for utilities
 log = logging.getLogger("BotManager")
@@ -41,7 +42,7 @@ def get_feedback(i18n, key: str, **kwargs) -> str:
         "error_id_not_found": Icons.WARNING,
         "error_unknown_bot": Icons.WARNING,
         "update_no_changes": Icons.WARNING,
-        "status_refreshed": Icons.WARNING, # Notification of refresh
+        "status_refreshed": Icons.WARNING,
 
         # --- Alerts (🚨) : Urgent state changes ---
         "bot_stopped_alert": Icons.ALERT,
@@ -58,6 +59,9 @@ def get_feedback(i18n, key: str, **kwargs) -> str:
         "clear_commands_success": Icons.SUCCESS,
         "purge_success": Icons.SUCCESS,
         "manager_update_success": Icons.SUCCESS,
+        "logs_rotate_success": Icons.SUCCESS,
+        "logs_rotate_no_need": Icons.WARNING,
+
         # --- Headers & UI Labels ---
         "manager_status_header": "",
         "bots_status_header": "",
@@ -75,6 +79,11 @@ def get_feedback(i18n, key: str, **kwargs) -> str:
         "error_admin_only": Icons.SHIELD_LIGHT,
         "error_admin_context": Icons.SHIELD_LIGHT,
         "error_admin_channel_only": Icons.SHIELD_LIGHT,
+        "error_inspector_only": Icons.SHIELD_LIGHT,
+        "error_command_failed": Icons.ERROR,
+        "sync_in_progress": Icons.WRENCH,
+        "clear_commands_in_progress": Icons.WRENCH,
+        "ping_pong": "",
         "manager_online_log": Icons.SHIELD_LIGHT,
         "activity_status": Icons.SHIELD,
 
@@ -113,39 +122,41 @@ def get_feedback(i18n, key: str, **kwargs) -> str:
         "activity_resource": Icons.GEAR,
         "activity_network": Icons.WAVE,
     }
-    
+
     # Key normalization: try exact match first, then lowercase match
     emoji = icons_map.get(key)
     if not emoji:
         emoji = icons_map.get(key.lower(), "")
-    
+
     # Fallback heuristic: match by keyword if no direct map
     if not emoji:
         lower_key = key.lower()
-        if "error" in lower_key: emoji = Icons.ERROR
-        elif "success" in lower_key: emoji = Icons.SUCCESS
-        elif "warning" in lower_key: emoji = Icons.WARNING
-    
+        if "error" in lower_key:
+            emoji = Icons.ERROR
+        elif "success" in lower_key:
+            emoji = Icons.SUCCESS
+        elif "warning" in lower_key:
+            emoji = Icons.WARNING
+
     # Inject all icons into kwargs so they can be used as placeholders like {WRENCH} or {UP}
     for attr in dir(Icons):
         if not attr.startswith("__") and not callable(getattr(Icons, attr)):
             icon_val = getattr(Icons, attr)
             if icon_val is not None:
-                # We use setdefault so we don't override manual kwargs if they exist
                 kwargs.setdefault(attr, str(icon_val))
-    
+
     text = i18n.get(key, **kwargs)
-    
+
     # If emoji is None (failed load), use empty string
     emoji_str = str(emoji) if emoji is not None else ""
-    
+
     # If the text already contains the emoji (manual placeholder in JSON), don't double it
     if emoji_str and emoji_str in text:
         return text
-        
+
     if not text:
         return emoji_str.strip()
-        
+
     return f"{emoji_str} {text}".strip()
 
 def format_desc(bot, text: str, guild=None) -> str:
@@ -153,15 +164,15 @@ def format_desc(bot, text: str, guild=None) -> str:
     Fills placeholders in command descriptions with actual channel and role names.
     Consistent with the Watcher Bot's dynamic description system.
     """
-    if not text: return text
-    
-    # Default values from IDs (use Discord mention syntax for better linking)
-    admin_val = f"<#{bot.admin_channel_id}>" if bot.admin_channel_id else "N/A"
-    public_val = f"<#{bot.public_channel_id}>" if bot.public_channel_id else "N/A"
-    admin_role_val = f"<@&{bot.admin_role_id}>" if bot.admin_role_id else "N/A"
-    tester_role_val = f"<@&{bot.tester_role_id}>" if bot.tester_role_id else "N/A"
+    if not text:
+        return text
 
-    # Even without the names, the mention IDs will still render as links in Discord.
+    # Default values from IDs (use Discord mention syntax for better linking)
+    admin_val = f"<#{bot.admin_channel_id}>" if getattr(bot, "admin_channel_id", None) else "N/A"
+    public_val = f"<#{bot.public_channel_id}>" if getattr(bot, "public_channel_id", None) else "N/A"
+    admin_role_val = f"<@&{bot.admin_role_id}>" if getattr(bot, "admin_role_id", None) else "N/A"
+    tester_role_val = f"<@&{bot.tester_role_id}>" if getattr(bot, "tester_role_id", None) else "N/A"
+
     return text.format(
         admin_channel=admin_val,
         public_channel=public_val,
@@ -169,116 +180,3 @@ def format_desc(bot, text: str, guild=None) -> str:
         tester_role=tester_role_val,
         bot_name=getattr(bot, 'manager_name', 'Bot Manager')
     )
-
-# This is a 'decorator' - it's a special function that checks something before running a command!
-class AccessLevel:
-    EVERYONE = 0
-    INSPECTOR = 1 # Tester Role
-    MECHANIC = 2 # Admin Role
-    BOSS = 3     # Administrator Permission
-
-def get_user_level(user, bot) -> int:
-    """Determine the highest access level of a user."""
-    # BOSS: Actual Discord Administrator
-    if hasattr(user, 'guild_permissions') and user.guild_permissions.administrator:
-        return AccessLevel.BOSS
-        
-    # Check roles for MECHANIC or INSPECTOR
-    if hasattr(user, 'roles'):
-        role_ids = [str(r.id) for r in user.roles]
-        
-        # Use getattr to be safe during migration/initialization
-        admin_role_id = getattr(bot, 'admin_role_id', None)
-        tester_role_id = getattr(bot, 'tester_role_id', None)
-        
-        # MECHANIC: Has the admin role
-        if admin_role_id and str(admin_role_id) in role_ids:
-            return AccessLevel.MECHANIC
-            
-        # INSPECTOR: Has the tester role
-        if tester_role_id and str(tester_role_id) in role_ids:
-            return AccessLevel.INSPECTOR
-            
-    return AccessLevel.EVERYONE
-
-def is_in_valid_channel(interaction_or_ctx, bot, level: int) -> bool:
-    """Check if the current channel is allowed for the given access level."""
-    channel_id = str(interaction_or_ctx.channel_id if hasattr(interaction_or_ctx, 'channel_id') else interaction_or_ctx.channel.id)
-    
-    # Workshop (Admin Channel): BOSS and MECHANIC can do everything here
-    if bot.admin_channel_id and channel_id == str(bot.admin_channel_id):
-        return level >= AccessLevel.MECHANIC
-        
-    # Lounge (Public/Tester Channel): INSPECTOR and above can use it
-    if bot.public_channel_id and channel_id == str(bot.public_channel_id):
-        return level >= AccessLevel.INSPECTOR
-        
-    # Global: Only very basic things or BOSS everywhere
-    return level == AccessLevel.BOSS
-
-# Decorators
-def is_admin_context():
-    """Slash command decorator: Requires MECHANIC level in Workshop or BOSS anywhere."""
-    def predicate(interaction: discord.Interaction) -> bool:
-        bot = interaction.client
-        level = get_user_level(interaction.user, bot)
-        
-        # Boss can do anything anywhere
-        if level == AccessLevel.BOSS:
-            return True
-            
-        # Mechanic can only do admin things in the Workshop
-        if bot.admin_channel_id and str(interaction.channel_id) == str(bot.admin_channel_id):
-            return level >= AccessLevel.MECHANIC
-            
-        return False
-    return app_commands.check(predicate)
-
-def is_monitor_context():
-    """Slash command decorator: Allows INSPECTOR level in either Admin or Public channels."""
-    def predicate(interaction: discord.Interaction) -> bool:
-        bot = interaction.client
-        level = get_user_level(interaction.user, bot)
-        
-        # Now allowing anyone with at least INSPECTOR level to use /status anywhere!
-        # It will be ephemeral (private) in non-admin channels.
-        return level >= AccessLevel.INSPECTOR
-    return app_commands.check(predicate)
-
-def is_admin_prefix_context():
-    """Prefix command decorator equivalent to is_admin_context."""
-    async def predicate(ctx: commands.Context) -> bool:
-        bot = ctx.bot
-        level = get_user_level(ctx.author, bot)
-        log.debug(f"[Prefix] Check for user {ctx.author} (Level: {level}) in channel {ctx.channel.id}")
-        
-        if level == AccessLevel.BOSS: return True
-        
-        if bot.admin_channel_id and str(ctx.channel.id) == str(bot.admin_channel_id):
-            res = level >= AccessLevel.MECHANIC
-            if not res: log.debug(f"[Prefix] Denied: Level {level} < MECHANIC in Admin channel.")
-            return res
-            
-        log.debug(f"[Prefix] Denied: Invalid channel or level for Admin command.")
-        return False
-    return commands.check(predicate)
-
-def is_monitor_prefix_context():
-    """Prefix command decorator equivalent to is_monitor_context."""
-    async def predicate(ctx: commands.Context) -> bool:
-        bot = ctx.bot
-        level = get_user_level(ctx.author, bot)
-        log.debug(f"[Prefix-Mon] Check for user {ctx.author} (Level: {level}) in channel {ctx.channel.id}")
-        
-        if level == AccessLevel.BOSS: return True
-        
-        channel_id = str(ctx.channel.id)
-        if (bot.admin_channel_id and channel_id == str(bot.admin_channel_id)) or \
-           (bot.public_channel_id and channel_id == str(bot.public_channel_id)):
-            res = level >= AccessLevel.INSPECTOR
-            if not res: log.debug(f"[Prefix-Mon] Denied: Level {level} < INSPECTOR.")
-            return res
-            
-        log.debug(f"[Prefix-Mon] Denied: Invalid channel.")
-        return False
-    return commands.check(predicate)
