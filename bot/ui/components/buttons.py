@@ -3,8 +3,17 @@ import discord
 from core.logger import log
 from core.icons import Icons
 from core.utils import get_feedback
+from core.common.constants import (
+    truncate_message,
+    DISCORD_TRUNCATE_OUTPUT_LIMIT,
+    DISCORD_TRUNCATE_OUTPUT_HEAD,
+    DISCORD_TRUNCATE_OUTPUT_TAIL,
+)
 from bot.checks import get_user_level, AccessLevel
 from bot.ui.embeds.update_result import UpdateResultEmbed
+from core.common.rate_limiter import InteractionRateLimiter
+
+_status_button_rate_limiter = InteractionRateLimiter(default_cooldown=3.0)
 
 class BotControlButton(discord.ui.Button):
     """Button for controlling child bots and manager self-actions."""
@@ -53,6 +62,13 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
     if level < required_level:
         msg = get_feedback(i18n, "error_admin_only") if level < AccessLevel.INSPECTOR else get_feedback(i18n, "error_inspector_only")
         await interaction.response.send_message(msg, ephemeral=True)
+        return
+
+    # 3.5 Check Rate Limiting
+    is_limited, remaining = _status_button_rate_limiter.is_limited(interaction.user.id, f"{bot_id}:{action}", cooldown=3.0)
+    if is_limited:
+        limit_msg = get_feedback(i18n, "rate_limit_alert", seconds=remaining)
+        await interaction.response.send_message(limit_msg, ephemeral=True)
         return
 
     # 4. Context (Channel) check
@@ -104,8 +120,12 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
             success, output, changed, details = await update_service.update_manager()
 
             if not success:
-                if len(output) > 1500:
-                    output = output[:700] + "\n... [TRUNCATED] ...\n" + output[-700:]
+                output = truncate_message(
+                    output,
+                    max_len=DISCORD_TRUNCATE_OUTPUT_LIMIT,
+                    head_len=DISCORD_TRUNCATE_OUTPUT_HEAD,
+                    tail_len=DISCORD_TRUNCATE_OUTPUT_TAIL
+                )
                 msg = get_feedback(i18n, "error_update_failed_output", output=output)
                 await interaction.followup.send(msg, ephemeral=False)
                 return
@@ -122,8 +142,7 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
                 await interaction.followup.send(embed=embed, ephemeral=False)
             else:
                 msg = get_feedback(i18n, "manager_update_success", name="Manager", output=output)
-                if len(msg) > 1900:
-                    msg = msg[:1000] + "\n... [TRUNCATED] ...\n" + msg[-800:]
+                msg = truncate_message(msg)
                 await interaction.followup.send(msg, ephemeral=False)
 
             await asyncio.sleep(2)
@@ -171,7 +190,5 @@ async def handle_status_interaction(interaction: discord.Interaction, bot_id: st
         else:
             result = result_msg
 
-    if len(result) > 1900:
-        result = result[:1000] + "\n... [TRUNCATED] ...\n" + result[-800:]
-
+    result = truncate_message(result)
     await interaction.followup.send(result, ephemeral=False)

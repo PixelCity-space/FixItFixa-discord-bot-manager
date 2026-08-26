@@ -13,21 +13,44 @@ class MonitoringCog(commands.Cog):
     """Handles the live status dashboard, periodic status refreshes, and info commands."""
     def __init__(self, bot):
         self.bot = bot
-        self.status_message_id = self.bot.state_repo.get("status_message_id") if hasattr(self.bot, 'state_repo') else self.bot.state.get("status_message_id")
-        self.status_channel_id = self.bot.state_repo.get("status_channel_id") if hasattr(self.bot, 'state_repo') else self.bot.state.get("status_channel_id")
+        self.status_message_id = self.bot.state_repo.get("status_message_id")
+        self.status_channel_id = self.bot.state_repo.get("status_channel_id")
         self._recreate_lock = asyncio.Lock()
 
-        bot_settings = self.bot.config_repo.app_config.bot_settings if hasattr(self.bot, 'config_repo') else self.bot.config.get("bot_settings", {})
-        self.refresh_interval = bot_settings.status_refresh_seconds if hasattr(bot_settings, 'status_refresh_seconds') else bot_settings.get("status_refresh_seconds", 60)
-        self.recreate_interval = bot_settings.status_recreate_minutes if hasattr(bot_settings, 'status_recreate_minutes') else bot_settings.get("status_recreate_minutes", 58)
+        bot_settings = self.bot.app_cfg.bot_settings
+        self.refresh_interval = bot_settings.status_refresh_seconds
+        self.recreate_interval = bot_settings.status_recreate_minutes
 
         self.git_behind_status = {}
         self.current_page = 0
+        self._background_tasks = set()
 
         for cmd in self.get_app_commands():
             if not hasattr(cmd, "_raw_desc"):
                 cmd._raw_desc = cmd.description
             cmd.description = format_desc(self.bot, cmd._raw_desc)
+
+    def create_tracked_task(self, coro, name: str = None) -> asyncio.Task:
+        """Creates a tracked background task with exception logging and cleanup."""
+        try:
+            task = asyncio.create_task(coro, name=name)
+        except RuntimeError:
+            loop = getattr(self.bot, "loop", None)
+            if loop and hasattr(loop, "create_task"):
+                task = loop.create_task(coro)
+            else:
+                task = asyncio.get_event_loop().create_task(coro)
+
+        self._background_tasks.add(task)
+
+        def _on_done(t: asyncio.Task):
+            self._background_tasks.discard(t)
+            if not t.cancelled() and t.exception():
+                task_name = name or (t.get_name() if hasattr(t, "get_name") else "Background task")
+                log.error(f"[MonitoringCog] Task '{task_name}' raised an unhandled exception: {t.exception()}", exc_info=t.exception())
+
+        task.add_done_callback(_on_done)
+        return task
 
     async def cog_load(self):
         log.info("[Status] MonitoringCog loaded. Starting background tasks...")
@@ -42,9 +65,6 @@ class MonitoringCog(commands.Cog):
         try:
             log.info("[Status] Initializing persistent status panel...")
             await self.cleanup_and_recreate_panel()
-
-            log.info("[Status] Starting git fetch background task...")
-            self.bot.loop.create_task(self.git_fetch_task())
 
             log.info("[Status] Starting task loops...")
             if not self.update_status_task.is_running():
@@ -61,14 +81,17 @@ class MonitoringCog(commands.Cog):
         self.update_status_task.cancel()
         self.recreate_status_task.cancel()
         self.git_fetch_task.cancel()
+        for t in list(self._background_tasks):
+            t.cancel()
+        self._background_tasks.clear()
 
     @tasks.loop(minutes=10)
     async def git_fetch_task(self):
         """Periodically checks concurrently if any bots or the manager have upstream updates."""
         log.info("[Git] Checking for updates in background threads...")
         manager_path = getattr(self.bot, 'base_dir', os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        bot_settings = self.bot.config_repo.app_config.bot_settings if hasattr(self.bot, 'config_repo') else self.bot.config.get("bot_settings", {})
-        default_branch = bot_settings.git_branch if hasattr(bot_settings, 'git_branch') else bot_settings.get("git_branch", "origin/main")
+        bot_settings = self.bot.app_cfg.bot_settings
+        default_branch = bot_settings.git_branch
 
         git_client = getattr(self.bot, 'git_client', None)
         if not git_client:
@@ -139,12 +162,8 @@ class MonitoringCog(commands.Cog):
                     self.status_message_id = str(new_msg.id)
                     self.status_channel_id = str(channel.id)
 
-                    if hasattr(self.bot, 'state_repo'):
-                        self.bot.state_repo.set("status_message_id", self.status_message_id)
-                        self.bot.state_repo.set("status_channel_id", self.status_channel_id)
-                    else:
-                        self.bot.save_state("status_message_id", self.status_message_id)
-                        self.bot.save_state("status_channel_id", self.status_channel_id)
+                    self.bot.state_repo.set("status_message_id", self.status_message_id)
+                    self.bot.state_repo.set("status_channel_id", self.status_channel_id)
 
                     log.info(f"[Status] New status panel created: {self.status_message_id} in {self.status_channel_id}")
             except Exception as e:

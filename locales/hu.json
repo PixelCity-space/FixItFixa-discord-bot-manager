@@ -53,6 +53,7 @@
     "error_admin_channel_only": "Ezt csak az admin csatornán lehet használni.",
     "error_inspector_only": "Ehhez a művelethez nincs jogosultságod, ellenőr úr!",
     "error_command_failed": "Hiba történt: `{error}`",
+    "rate_limit_alert": "⏳ Kérlek várj még {seconds} másodpercet a következő művelet előtt!",
     "status_running": "Fut",
     "status_uncertain": "Állapot bizonytalan (Access Denied)",
     "status_stopped": "Nem fut",

@@ -4,16 +4,16 @@ import asyncio
 from typing import Dict, Any, Optional, Tuple, List
 from core.logger import log
 from core.config.models import AppConfig, BotConfig
-from core.system.git_client import GitClient
-from core.services.bot_lifecycle_service import BotLifecycleService
+from core.interfaces.system import IGitClient
+from core.interfaces.services import IBotLifecycleService
 
 class UpdateService:
     """Orchestrates git updates, dependency installation, rollbacks, and self-updates."""
     def __init__(
         self,
         config: AppConfig,
-        git_client: GitClient,
-        lifecycle_service: BotLifecycleService,
+        git_client: IGitClient,
+        lifecycle_service: IBotLifecycleService,
         manager_root: str = "."
     ):
         self.config = config
@@ -39,9 +39,13 @@ class UpdateService:
         branch = self.config.bot_settings.git_branch
         log.info(f"[UpdateService] Updating Manager at {self.manager_root} on branch {branch}")
 
-        success, output, changed, details = await asyncio.to_thread(
-            self.git_client.update_repo, self.manager_root, branch
-        )
+        update_fn = getattr(self.git_client, "update_repo_async", None)
+        if callable(update_fn) and asyncio.iscoroutinefunction(update_fn):
+            success, output, changed, details = await update_fn(self.manager_root, branch)
+        else:
+            success, output, changed, details = await asyncio.to_thread(
+                self.git_client.update_repo, self.manager_root, branch
+            )
 
         if not success:
             return False, output, False, None
@@ -50,9 +54,13 @@ class UpdateService:
             return True, "No changes detected.", False, None
 
         # Install dependencies
-        pip_ok, pip_out = await asyncio.to_thread(
-            self.git_client.install_dependencies, self.manager_root
-        )
+        pip_fn = getattr(self.git_client, "install_dependencies_async", None)
+        if callable(pip_fn) and asyncio.iscoroutinefunction(pip_fn):
+            pip_ok, pip_out = await pip_fn(self.manager_root)
+        else:
+            pip_ok, pip_out = await asyncio.to_thread(
+                self.git_client.install_dependencies, self.manager_root
+            )
 
         if details:
             details["pip_status"] = "OK" if pip_ok else f"Error: {pip_out[:100]}"
@@ -68,9 +76,13 @@ class UpdateService:
         branch = bot_cfg.git_branch or self.config.bot_settings.git_branch
         log.info(f"[UpdateService] Updating bot '{bot_cfg.name}' at {bot_cfg.path} (branch: {branch})")
 
-        success, output, changed, details = await asyncio.to_thread(
-            self.git_client.update_repo, bot_cfg.path, branch
-        )
+        update_fn = getattr(self.git_client, "update_repo_async", None)
+        if callable(update_fn) and asyncio.iscoroutinefunction(update_fn):
+            success, output, changed, details = await update_fn(bot_cfg.path, branch)
+        else:
+            success, output, changed, details = await asyncio.to_thread(
+                self.git_client.update_repo, bot_cfg.path, branch
+            )
 
         if not success:
             return False, output, False, None, []
@@ -79,9 +91,13 @@ class UpdateService:
             return True, output, False, None, []
 
         # Install dependencies
-        pip_ok, pip_out = await asyncio.to_thread(
-            self.git_client.install_dependencies, bot_cfg.path, bot_cfg.cmd
-        )
+        pip_fn = getattr(self.git_client, "install_dependencies_async", None)
+        if callable(pip_fn) and asyncio.iscoroutinefunction(pip_fn):
+            pip_ok, pip_out = await pip_fn(bot_cfg.path, bot_cfg.cmd)
+        else:
+            pip_ok, pip_out = await asyncio.to_thread(
+                self.git_client.install_dependencies, bot_cfg.path, bot_cfg.cmd
+            )
 
         if details:
             details["pip_status"] = "OK" if pip_ok else f"Error: {pip_out[:100]}"
@@ -99,17 +115,25 @@ class UpdateService:
             return False, "Bot not found", False, None, []
 
         log.info(f"[UpdateService] Rolling back bot '{bot_cfg.name}' at {bot_cfg.path}")
-        success, output, changed, details = await asyncio.to_thread(
-            self.git_client.rollback_repo, bot_cfg.path
-        )
+        rollback_fn = getattr(self.git_client, "rollback_repo_async", None)
+        if callable(rollback_fn) and asyncio.iscoroutinefunction(rollback_fn):
+            success, output, changed, details = await rollback_fn(bot_cfg.path)
+        else:
+            success, output, changed, details = await asyncio.to_thread(
+                self.git_client.rollback_repo, bot_cfg.path
+            )
 
         if not success:
             return False, output, False, None, []
 
         # Re-install dependencies (if requirements changed)
-        pip_ok, pip_out = await asyncio.to_thread(
-            self.git_client.install_dependencies, bot_cfg.path, bot_cfg.cmd
-        )
+        pip_fn = getattr(self.git_client, "install_dependencies_async", None)
+        if callable(pip_fn) and asyncio.iscoroutinefunction(pip_fn):
+            pip_ok, pip_out = await pip_fn(bot_cfg.path, bot_cfg.cmd)
+        else:
+            pip_ok, pip_out = await asyncio.to_thread(
+                self.git_client.install_dependencies, bot_cfg.path, bot_cfg.cmd
+            )
 
         if details:
             details["pip_status"] = "OK" if pip_ok else f"Error: {pip_out[:100]}"
@@ -119,3 +143,5 @@ class UpdateService:
         combined_output = f"{output}\n{pip_out}"
 
         return True, combined_output, True, details, restart_results
+
+__all__ = ["UpdateService"]

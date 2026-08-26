@@ -1,0 +1,25 @@
+[run]
+source =
+    core
+    bot
+omit =
+    tests/*
+    */__pycache__/*
+    */virtualenvs/*
+    */.venv/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+show_missing = True
+precision = 1

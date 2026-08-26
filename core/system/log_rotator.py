@@ -32,11 +32,11 @@ class LogRotator:
                     if os.path.exists(dfn):
                         try:
                             os.remove(dfn)
-                        except Exception:
-                            pass
+                        except (PermissionError, OSError) as e:
+                            log.debug(f"[LogRotator] Could not pre-clean target backup {dfn}: {e}")
                     try:
                         os.rename(sfn, dfn)
-                    except Exception as e:
+                    except (PermissionError, OSError) as e:
                         log.warning(f"[LogRotator] Failed to rename {sfn} -> {dfn}: {e}")
 
             # 2. Copy current log to file.1
@@ -44,8 +44,8 @@ class LogRotator:
             if os.path.exists(backup_1):
                 try:
                     os.remove(backup_1)
-                except Exception:
-                    pass
+                except (PermissionError, OSError) as e:
+                    log.debug(f"[LogRotator] Could not pre-clean backup_1 {backup_1}: {e}")
 
             shutil.copy2(file_path, backup_1)
 
@@ -56,8 +56,11 @@ class LogRotator:
             log.info(f"[LogRotator] Successfully rotated '{file_path}' (Original size: {file_size / (1024 * 1024):.2f} MB)")
             return True, f"{file_size / (1024 * 1024):.2f} MB"
 
+        except (PermissionError, OSError) as e:
+            log.error(f"[LogRotator] File system permission or I/O error rotating '{file_path}': {e}")
+            return False, str(e)
         except Exception as e:
-            log.error(f"[LogRotator] Error rotating log file '{file_path}': {e}")
+            log.error(f"[LogRotator] Unexpected error rotating log file '{file_path}': {e}")
             return False, str(e)
 
     def rotate_bot_log(self, bot_cfg: BotConfig, force: bool = False) -> Tuple[bool, str]:
@@ -72,3 +75,20 @@ class LogRotator:
             success, msg = self.rotate_bot_log(bot_cfg, force=force)
             results.append((bot_cfg, success, msg))
         return results
+
+    async def rotate_file_async(self, file_path: str, force: bool = False) -> Tuple[bool, str]:
+        """Asynchronously rotates a single log file in a worker thread."""
+        import asyncio
+        return await asyncio.to_thread(self.rotate_file, file_path, force)
+
+    async def rotate_bot_log_async(self, bot_cfg: BotConfig, force: bool = False) -> Tuple[bool, str]:
+        """Asynchronously rotates a bot's log file in a worker thread."""
+        import asyncio
+        return await asyncio.to_thread(self.rotate_bot_log, bot_cfg, force)
+
+    async def rotate_all_bots_async(self, bots: Dict[str, BotConfig], force: bool = False) -> List[Tuple[BotConfig, bool, str]]:
+        """Asynchronously rotates log files for all configured bots in a worker thread."""
+        import asyncio
+        return await asyncio.to_thread(self.rotate_all_bots, bots, force)
+
+__all__ = ["LogRotator"]

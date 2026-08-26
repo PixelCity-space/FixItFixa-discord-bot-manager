@@ -1,6 +1,7 @@
 from core.config.models import BotConfig, AccessControlConfig, BotSettingsConfig, AppConfig
 from core.config.config_repository import ConfigRepository
 from core.config.state_repository import StateRepository
+from core.config.validator import ConfigValidator, ConfigValidationError, ValidationError
 
 __all__ = [
     "BotConfig",
@@ -8,5 +9,8 @@ __all__ = [
     "BotSettingsConfig",
     "AppConfig",
     "ConfigRepository",
-    "StateRepository"
+    "StateRepository",
+    "ConfigValidator",
+    "ConfigValidationError",
+    "ValidationError"
 ]

@@ -1,18 +1,18 @@
 import os
 import asyncio
+import psutil
 from typing import List, Optional, Callable, Tuple
 from core.logger import log
 from core.config.models import BotConfig, AppConfig
-from core.system.process_spawner import ProcessSpawner
-from core.system.process_tracker import ProcessTracker
+from core.interfaces.system import IProcessSpawner, IProcessTracker
 
 class BotLifecycleService:
     """Orchestrates starting, stopping, and restarting child bot processes and clusters."""
     def __init__(
         self,
         config: AppConfig,
-        spawner: ProcessSpawner,
-        tracker: ProcessTracker,
+        spawner: IProcessSpawner,
+        tracker: IProcessTracker,
         notify_callback: Optional[Callable] = None
     ):
         self.config = config
@@ -44,7 +44,11 @@ class BotLifecycleService:
 
         if self.tracker.is_running(bot_id):
             proc = self.tracker.managed_processes.get(bot_id)
-            return proc.pid if proc else None
+            if proc:
+                try:
+                    return proc.pid
+                except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                    self.tracker.unregister(bot_id)
 
         # Systemd check (Linux)
         if bot_cfg.systemd_service and os.name == 'posix':
@@ -75,7 +79,12 @@ class BotLifecycleService:
         # Terminate tracked process
         proc = self.tracker.managed_processes.get(bot_id)
         if proc:
-            await self.spawner.terminate_process(proc)
+            try:
+                await self.spawner.terminate_process(proc)
+            except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                pass
+            except Exception as e:
+                log.debug(f"[BotLifecycleService] Non-critical error terminating process for {bot_id}: {e}")
 
         self.tracker.unregister(bot_id)
 

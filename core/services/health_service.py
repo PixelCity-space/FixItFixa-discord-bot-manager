@@ -1,16 +1,15 @@
 from typing import List, Tuple, Set, Callable, Optional
 from core.logger import log
 from core.config.models import AppConfig, BotConfig
-from core.system.process_tracker import ProcessTracker
-from core.system.process_spawner import ProcessSpawner
+from core.interfaces.system import IProcessTracker, IProcessSpawner
 
 class HealthService:
     """Monitors running bot health, detects crashes, and manages alert states."""
     def __init__(
         self,
         config: AppConfig,
-        tracker: ProcessTracker,
-        spawner: ProcessSpawner,
+        tracker: IProcessTracker,
+        spawner: IProcessSpawner,
         alert_callback: Optional[Callable] = None
     ):
         self.config = config

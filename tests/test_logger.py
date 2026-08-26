@@ -30,7 +30,7 @@ def test_logger_writes_messages(tmp_path):
 
 def test_setup_discord_logging(tmp_path):
     log_file = tmp_path / "discord.log"
-    setup_discord_logging(str(log_file), max_bytes=1024, backup_count=2)
+    setup_discord_logging(str(log_file), max_bytes=1024, backup_count=2, level=logging.INFO)
     discord_logger = logging.getLogger("discord")
-    assert discord_logger.level == logging.DEBUG
+    assert discord_logger.level == logging.INFO
     assert any(str(log_file) in getattr(h, 'baseFilename', '') for h in discord_logger.handlers)

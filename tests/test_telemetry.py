@@ -1,5 +1,7 @@
 import datetime
 import pytest
+from unittest.mock import MagicMock, patch
+import psutil
 from core.config.models import AppConfig, BotConfig
 from core.system.process_tracker import ProcessTracker
 from core.system.metrics_collector import MetricsCollector
@@ -37,6 +39,10 @@ def test_telemetry_format_uptime(telemetry_service):
     d_res = telemetry_service.format_uptime(100000)
     assert "1" in d_res
 
+    # Negative uptime drift is sanitized to 0
+    neg_res = telemetry_service.format_uptime(-15)
+    assert "0" in neg_res
+
 def test_telemetry_get_log_size(telemetry_service, tmp_path):
     log_file = tmp_path / "app.log"
     log_file.write_text("A" * 5000, encoding="utf-8")
@@ -49,6 +55,11 @@ def test_telemetry_get_log_size(telemetry_service, tmp_path):
 
     missing_res = telemetry_service.get_log_size(str(tmp_path), "missing.log")
     assert missing_res == "N/A"
+
+    # None and empty checks
+    assert telemetry_service.get_log_size(None, "app.log") == "N/A"
+    assert telemetry_service.get_log_size(str(tmp_path), None) == "N/A"
+    assert telemetry_service.get_log_size("", "") == "N/A"
 
 def test_telemetry_get_db_sizes(telemetry_service, tmp_path):
     db1 = tmp_path / "main.db"
@@ -63,6 +74,11 @@ def test_telemetry_get_db_sizes(telemetry_service, tmp_path):
     assert "MB" in sizes["large.db"]
     assert "not_found.db" not in sizes
 
+    # None and empty checks
+    assert telemetry_service.get_db_sizes(None, ["main.db"]) == {}
+    assert telemetry_service.get_db_sizes(str(tmp_path), None) == {}
+    assert telemetry_service.get_db_sizes(str(tmp_path), []) == {}
+
 def test_telemetry_collect_manager_metrics(telemetry_service):
     mgr_stats = telemetry_service.collect_manager_metrics({"manager": True})
     assert "cpu" in mgr_stats
@@ -71,6 +87,13 @@ def test_telemetry_collect_manager_metrics(telemetry_service):
     assert "os" in mgr_stats
     assert "sys_disk_free" in mgr_stats
     assert mgr_stats["has_update"] is True
+
+def test_telemetry_collect_manager_metrics_psutil_exception_fallback(telemetry_service):
+    with patch("psutil.Process") as mock_proc:
+        mock_proc.side_effect = psutil.AccessDenied()
+        mgr_stats = telemetry_service.collect_manager_metrics()
+        assert mgr_stats["cpu"] == 0.0
+        assert mgr_stats["ram"] == 0.0
 
 def test_telemetry_get_status_snapshot(telemetry_service):
     mgr_stats, bots_stats = telemetry_service.get_status_snapshot()

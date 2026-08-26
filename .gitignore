@@ -42,6 +42,15 @@ temp_logs.txt
 # State and temp
 state.json
 tmp/
+scratch/
+
+# Testing & Quality caches
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # OS generated files
 .DS_Store

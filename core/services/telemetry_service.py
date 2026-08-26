@@ -1,21 +1,21 @@
 import os
 import psutil
 import datetime
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from core.config.models import AppConfig
-from core.system.process_tracker import ProcessTracker
-from core.system.metrics_collector import MetricsCollector
-from core.services.i18n_service import LocalizationService
+from core.interfaces.system import IProcessTracker, IMetricsCollector
+from core.interfaces.services import ILocalizationService
 from core.utils import get_feedback
+from core.logger import log
 
 class TelemetryService:
     """Aggregates system, process, log file, and database telemetry into structured status payloads."""
     def __init__(
         self,
         config: AppConfig,
-        tracker: ProcessTracker,
-        metrics_collector: MetricsCollector,
-        i18n: LocalizationService,
+        tracker: IProcessTracker,
+        metrics_collector: IMetricsCollector,
+        i18n: ILocalizationService,
         start_time: Optional[datetime.datetime] = None,
     ):
         self.config = config
@@ -26,14 +26,18 @@ class TelemetryService:
 
     def format_uptime(self, uptime_sec: float) -> str:
         """Formats uptime in seconds into localized human-readable string."""
-        if uptime_sec > 86400:
-            return get_feedback(self.i18n, "uptime_days", d=int(uptime_sec / 86400))
-        elif uptime_sec > 3600:
-            return get_feedback(self.i18n, "uptime_hours", h=int(uptime_sec / 3600))
-        return get_feedback(self.i18n, "uptime_minutes", m=int(uptime_sec / 60))
+        sec = max(0.0, float(uptime_sec))
+        if sec >= 86400:
+            return get_feedback(self.i18n, "uptime_days", d=int(sec / 86400))
+        elif sec >= 3600:
+            return get_feedback(self.i18n, "uptime_hours", h=int(sec / 3600))
+        return get_feedback(self.i18n, "uptime_minutes", m=int(sec / 60))
 
-    def get_log_size(self, bot_path: str, log_filename: str) -> str:
+    def get_log_size(self, bot_path: Optional[str], log_filename: Optional[str]) -> str:
         """Calculates human-readable log size in MB or KB."""
+        if not bot_path or not log_filename:
+            return "N/A"
+
         try:
             log_file_path = os.path.join(bot_path, log_filename)
             if os.path.exists(log_file_path):
@@ -41,17 +45,21 @@ class TelemetryService:
                 if size_bytes > 1024 * 1024:
                     return f"{size_bytes / (1024 * 1024):.1f} MB"
                 return f"{size_bytes / 1024:.1f} KB"
-        except Exception:
-            pass
+        except (FileNotFoundError, PermissionError, OSError) as e:
+            log.debug(f"[TelemetryService] Could not read log size for {bot_path}/{log_filename}: {e}")
+        except Exception as e:
+            log.debug(f"[TelemetryService] Unexpected error reading log size for {bot_path}/{log_filename}: {e}")
         return "N/A"
 
-    def get_db_sizes(self, bot_path: str, db_filenames: list[str]) -> Dict[str, str]:
+    def get_db_sizes(self, bot_path: Optional[str], db_filenames: Optional[List[str]]) -> Dict[str, str]:
         """Calculates file sizes of all monitored SQLite database files."""
         db_sizes = {}
-        if not db_filenames:
+        if not bot_path or not db_filenames:
             return db_sizes
 
         for db_file in db_filenames:
+            if not db_file:
+                continue
             try:
                 db_path = os.path.join(bot_path, db_file)
                 if os.path.exists(db_path):
@@ -60,25 +68,35 @@ class TelemetryService:
                         db_sizes[db_file] = f"{db_bytes / (1024 * 1024):.1f} MB"
                     else:
                         db_sizes[db_file] = f"{db_bytes / 1024:.1f} KB"
-            except Exception:
-                pass
+            except (FileNotFoundError, PermissionError, OSError) as e:
+                log.debug(f"[TelemetryService] Could not read db size for {bot_path}/{db_file}: {e}")
+            except Exception as e:
+                log.debug(f"[TelemetryService] Unexpected error reading db size for {bot_path}/{db_file}: {e}")
         return db_sizes
 
     def collect_manager_metrics(self, git_behind_status: Optional[Dict[str, bool]] = None) -> Dict[str, Any]:
         """Gathers Manager process and host system statistics."""
-        current_proc = psutil.Process()
-        with current_proc.oneshot():
-            self_cpu = current_proc.cpu_percent()
-            self_ram_mb = current_proc.memory_info().rss / 1024 / 1024
+        self_cpu = 0.0
+        self_ram_mb = 0.0
 
-        uptime_sec = (datetime.datetime.now() - self.start_time).total_seconds()
+        try:
+            current_proc = psutil.Process()
+            with current_proc.oneshot():
+                self_cpu = current_proc.cpu_percent()
+                self_ram_mb = current_proc.memory_info().rss / (1024 * 1024)
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            log.debug(f"[TelemetryService] Could not sample manager process metrics: {e}")
+        except Exception as e:
+            log.debug(f"[TelemetryService] Unexpected error sampling manager metrics: {e}")
+
+        uptime_sec = max(0.0, (datetime.datetime.now() - self.start_time).total_seconds())
         uptime_str = self.format_uptime(uptime_sec)
 
-        sys_metrics = self.metrics_collector.get_system_metrics()
+        sys_metrics = (self.metrics_collector.get_system_metrics() if self.metrics_collector else None) or {}
         host_uptime_sec = sys_metrics.get("host_uptime_sec", 0)
         host_uptime_str = self.format_uptime(host_uptime_sec)
 
-        default_branch = self.config.bot_settings.git_branch
+        default_branch = self.config.bot_settings.git_branch if self.config and self.config.bot_settings else "origin/main"
 
         behind_map = git_behind_status or {}
         has_update = behind_map.get("manager", False)

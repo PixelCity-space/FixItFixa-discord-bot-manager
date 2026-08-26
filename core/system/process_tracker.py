@@ -1,9 +1,13 @@
 import os
 import psutil
 import datetime
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional, Any, TYPE_CHECKING
 from core.logger import log
 from core.config.models import BotConfig
+from core.system.path_utils import is_subpath_or_equal
+
+if TYPE_CHECKING:
+    from core.interfaces.system import IProcessSpawner
 
 class ProcessTracker:
     """Tracks active processes, collects bot metrics, and detects crashes/unexpected stops."""
@@ -12,16 +16,28 @@ class ProcessTracker:
         self.manual_stop: set = set()
 
     def is_running(self, bot_id: str) -> bool:
-        """Checks if a bot's process is currently alive."""
+        """Checks if a bot's process is currently alive and not in a zombie state."""
         process = self.managed_processes.get(bot_id)
-        return bool(process and process.is_running())
+        if not process:
+            return False
+        try:
+            alive = bool(process.is_running() and process.status() != psutil.STATUS_ZOMBIE)
+            if not alive:
+                self.unregister(bot_id)
+            return alive
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            self.unregister(bot_id)
+            return False
+        except Exception as e:
+            log.debug(f"[ProcessTracker] Error checking is_running for {bot_id}: {e}")
+            return False
 
     def register(self, bot_id: str, pid: int) -> None:
         """Registers a newly started PID under tracking."""
         try:
             self.managed_processes[bot_id] = psutil.Process(pid)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess) as e:
+            log.debug(f"[ProcessTracker] Could not attach to PID {pid} for bot {bot_id}: {e}")
 
     def unregister(self, bot_id: str) -> None:
         """Removes a bot from active tracking."""
@@ -35,13 +51,23 @@ class ProcessTracker:
         """Clears the manual stop flag once a bot is verified gone or restarted."""
         self.manual_stop.discard(bot_id)
 
+    # Known runtime executables for bots to filter out unrelated OS/system processes fast
+    RUNTIME_EXECUTABLES = ("python", "java", "node", "pypy", "uv", "uvicorn")
+
     def discover_processes(self, bots: Dict[str, BotConfig]) -> int:
-        """Scans running system processes to find and attach to any already-running bots."""
+        """Scans running system processes to find and attach to any already-running bots.
+        
+        Optimized with fast executable name filtering to prevent expensive OS syscalls on unrelated processes.
+        """
         found_count = 0
-        for proc in psutil.process_iter(['pid', 'name', 'cmdline', 'cwd']):
+        for proc in psutil.process_iter(['pid', 'name']):
             try:
-                cmdline = proc.info.get('cmdline')
-                cwd = proc.info.get('cwd')
+                name = (proc.info.get('name') or '').lower()
+                if not any(name.startswith(exe) for exe in self.RUNTIME_EXECUTABLES):
+                    continue
+
+                cmdline = proc.cmdline()
+                cwd = proc.cwd()
                 if not cmdline or not cwd or len(cmdline) < 2:
                     continue
 
@@ -60,17 +86,18 @@ class ProcessTracker:
                         continue
 
                     target_args = " ".join(target_parts[1:]) if len(target_parts) > 1 else target_parts[0]
-                    target_path = os.path.normpath(bot_cfg.path).lower()
-
-                    path_match = (target_path == norm_cwd) or (norm_cwd.endswith(target_path.split(":")[-1].replace("\\", "/").strip("/").lower()))
+                    path_match = is_subpath_or_equal(cwd, bot_cfg.path)
                     cmd_match = target_args in cmd_str
 
                     if cmd_match and path_match:
-                        self.managed_processes[bot_id] = psutil.Process(proc.info['pid'])
-                        log.info(f"[ProcessTracker] Connected to existing bot: {bot_cfg.name} (PID: {proc.info['pid']})")
+                        self.managed_processes[bot_id] = proc
+                        log.info(f"[ProcessTracker] Connected to existing bot: {bot_cfg.name} (PID: {proc.pid})")
                         found_count += 1
                         break
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+            except Exception as e:
+                log.debug(f"[ProcessTracker] Error during process discovery: {e}")
                 continue
         return found_count
 
@@ -79,12 +106,12 @@ class ProcessTracker:
         process = self.managed_processes.get(bot_id)
 
         # Proactive discovery if process is missing or dead
-        if not process or not process.is_running():
+        if not process or not self.is_running(bot_id):
             if all_bots:
                 self.discover_processes(all_bots)
                 process = self.managed_processes.get(bot_id)
 
-        if not process or not process.is_running():
+        if not process or not self.is_running(bot_id):
             return None
 
         try:
@@ -97,7 +124,7 @@ class ProcessTracker:
                 try:
                     io = process.io_counters()
                     disk_mb = (io.read_bytes + io.write_bytes) / (1024 * 1024)
-                except (psutil.AccessDenied, AttributeError):
+                except (psutil.AccessDenied, AttributeError, psutil.NoSuchProcess):
                     disk_mb = None
 
             return {
@@ -107,10 +134,16 @@ class ProcessTracker:
                 "pid": process.pid,
                 "disk_mb": disk_mb
             }
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
+            self.unregister(bot_id)
+            return None
+        except psutil.AccessDenied:
+            return None
+        except Exception as e:
+            log.debug(f"[ProcessTracker] Unexpected error reading stats for {bot_id}: {e}")
             return None
 
-    def fetch_unexpected_stops(self, bots: Dict[str, BotConfig], spawner=None) -> List[Tuple[str, BotConfig]]:
+    def fetch_unexpected_stops(self, bots: Dict[str, BotConfig], spawner: Optional['IProcessSpawner'] = None) -> List[Tuple[str, BotConfig]]:
         """Identifies bots that have unexpectedly terminated or crashed."""
         stopped_bots = []
 
@@ -122,7 +155,7 @@ class ProcessTracker:
             if systemd_service and os.name == 'posix' and spawner:
                 state = spawner.get_systemd_state(systemd_service)
                 if state == "active":
-                    if not process or not process.is_running():
+                    if not process or not self.is_running(bot_id):
                         pid = spawner.get_systemd_pid(systemd_service)
                         if pid:
                             self.register(bot_id, pid)
@@ -134,13 +167,19 @@ class ProcessTracker:
 
             # Standard process check
             if process:
-                if not process.is_running():
+                is_alive = False
+                try:
+                    is_alive = process.is_running() and process.status() != psutil.STATUS_ZOMBIE
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    is_alive = False
+
+                if not is_alive:
                     if bot_id not in self.manual_stop:
                         stopped_bots.append((bot_id, bot_cfg))
                     self.unregister(bot_id)
 
             if bot_id in self.manual_stop:
-                if not process or not process.is_running():
+                if not process or not self.is_running(bot_id):
                     self.manual_stop.remove(bot_id)
 
         return stopped_bots

@@ -13,6 +13,21 @@ from core.services.update_service import UpdateService
 from core.services.health_service import HealthService
 from core.services.i18n_service import LocalizationService
 from core.services.telemetry_service import TelemetryService
+from core.container import ServiceContainer
+from core.interfaces import (
+    ILogRotator,
+    IProcessSpawner,
+    IProcessTracker,
+    IGitClient,
+    IMetricsCollector,
+    IConfigRepository,
+    IStateRepository,
+    ILocalizationService,
+    IBotLifecycleService,
+    IUpdateService,
+    IHealthService,
+    ITelemetryService,
+)
 
 __all__ = [
     "log",
@@ -36,5 +51,18 @@ __all__ = [
     "UpdateService",
     "HealthService",
     "LocalizationService",
-    "TelemetryService"
+    "TelemetryService",
+    "ILogRotator",
+    "IProcessSpawner",
+    "IProcessTracker",
+    "IGitClient",
+    "IMetricsCollector",
+    "IConfigRepository",
+    "IStateRepository",
+    "ILocalizationService",
+    "IBotLifecycleService",
+    "IUpdateService",
+    "IHealthService",
+    "ITelemetryService",
+    "ServiceContainer",
 ]

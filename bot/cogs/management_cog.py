@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 from core.logger import log
 from core.utils import get_feedback
+from core.common.constants import truncate_message
 from bot.checks import is_admin_context, is_monitor_context
 from bot.autocomplete import bot_id_autocomplete
 from bot.ui.embeds.update_result import UpdateResultEmbed
@@ -31,8 +32,7 @@ class ManagementCog(commands.Cog):
             embed = UpdateResultEmbed(self.bot.i18n, title, details, ui_settings=self.bot.ui_settings)
             await interaction.followup.send(embed=embed, ephemeral=False)
         else:
-            if len(result_msg) > 1900:
-                result_msg = result_msg[:1000] + "\n\n... [TRUNCATED] ...\n\n" + result_msg[-800:]
+            result_msg = truncate_message(result_msg)
             await interaction.followup.send(result_msg, ephemeral=False)
 
     @app_commands.command(name="restart", description="[Bot Dev] Restart a bot without update.")
@@ -77,8 +77,8 @@ class ManagementCog(commands.Cog):
     @is_monitor_context()
     @app_commands.autocomplete(bot_id=bot_id_autocomplete)
     async def logs(self, interaction: discord.Interaction, bot_id: str, lines: int | None = None):
-        bot_settings = self.bot.config_repo.app_config.bot_settings if hasattr(self.bot, 'config_repo') else self.bot.config.get("bot_settings", {})
-        default_lines = bot_settings.log_default_lines if hasattr(bot_settings, 'log_default_lines') else bot_settings.get("log_default_lines", 50)
+        bot_settings = self.bot.app_cfg.bot_settings
+        default_lines = bot_settings.log_default_lines
         lines = lines if lines is not None else default_lines
 
         log.info(f"User {interaction.user} requested /logs ({lines} lines) for bot: {bot_id}")
@@ -89,8 +89,7 @@ class ManagementCog(commands.Cog):
             return
 
         bot = self.bot.bots[bot_id]
-        default_log_name = bot_settings.bot_log_default if hasattr(bot_settings, 'bot_log_default') else bot_settings.get("bot_log_default", "bot.log")
-        log_name = bot.log if bot.log else default_log_name
+        log_name = bot.log if bot.log else bot_settings.bot_log_default
         log_path = os.path.join(bot.path, log_name)
 
         if os.path.exists(log_path):
@@ -121,14 +120,14 @@ class ManagementCog(commands.Cog):
     @app_commands.describe(lines="Number of lines")
     @is_admin_context()
     async def manager_logs(self, interaction: discord.Interaction, lines: int | None = None):
-        bot_settings = self.bot.config_repo.app_config.bot_settings if hasattr(self.bot, 'config_repo') else self.bot.config.get("bot_settings", {})
-        default_lines = bot_settings.log_default_lines if hasattr(bot_settings, 'log_default_lines') else bot_settings.get("log_default_lines", 50)
+        bot_settings = self.bot.app_cfg.bot_settings
+        default_lines = bot_settings.log_default_lines
         lines = lines if lines is not None else default_lines
 
         log.info(f"User {interaction.user} requested /manager-logs ({lines} lines)")
         await interaction.response.defer(ephemeral=False)
 
-        log_path = bot_settings.manager_log_file if hasattr(bot_settings, 'manager_log_file') else bot_settings.get("manager_log_file", "manager.log")
+        log_path = bot_settings.manager_log_file
 
         if os.path.exists(log_path):
             try:
@@ -223,8 +222,7 @@ class ManagementCog(commands.Cog):
                 await interaction.followup.send(embed=embed, ephemeral=False)
             else:
                 msg = get_feedback(self.bot.i18n, "manager_update_success", name=self.bot.manager_name, output=output)
-                if len(msg) > 1900:
-                    msg = msg[:1000] + "\n... [TRUNCATED] ...\n" + msg[-800:]
+                msg = truncate_message(msg)
                 await interaction.followup.send(msg, ephemeral=False)
 
             log.info("Manager updated, restarting process...")

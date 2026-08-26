@@ -1,36 +1,39 @@
 import discord
+from typing import ClassVar, Optional, Union
+
+EmojiType = Optional[Union[str, discord.PartialEmoji, discord.Emoji]]
 
 class Icons:
-    RESTART: discord.PartialEmoji = None
-    UPDATE: discord.PartialEmoji = None
-    STOP: discord.PartialEmoji = None
+    RESTART: ClassVar[EmojiType] = None
+    UPDATE: ClassVar[EmojiType] = None
+    STOP: ClassVar[EmojiType] = None
     
     # Standard UI Icons (consistent with Watcher Bot)
-    ROCKET: discord.PartialEmoji = None
-    SUCCESS: discord.PartialEmoji = None
-    CONTROLLER: discord.PartialEmoji = None
-    ERROR: discord.PartialEmoji = None
-    WARNING: discord.PartialEmoji = None
+    ROCKET: ClassVar[EmojiType] = None
+    SUCCESS: ClassVar[EmojiType] = None
+    CONTROLLER: ClassVar[EmojiType] = None
+    ERROR: ClassVar[EmojiType] = None
+    WARNING: ClassVar[EmojiType] = None
     
     # New Visual Elements
-    ALERT: discord.PartialEmoji = None
-    LOG: discord.PartialEmoji = None
-    PACKAGE: discord.PartialEmoji = None
-    SHIELD: discord.PartialEmoji = None
-    SHIELD_LIGHT: discord.PartialEmoji = None
-    ROLLBACK: discord.PartialEmoji = None
-    DOT_GREEN: discord.PartialEmoji = None
-    DOT_RED: discord.PartialEmoji = None
-    DOT_YELLOW: discord.PartialEmoji = None
-    UP: discord.PartialEmoji = None
-    DOWN: discord.PartialEmoji = None
-    WRENCH: discord.PartialEmoji = None
-    GEAR: discord.PartialEmoji = None
-    WAVE: discord.PartialEmoji = None
-    ACTIVITY_UP: discord.PartialEmoji = None
-    ACTIVITY_DOWN: discord.PartialEmoji = None
-    CARET_LEFT: discord.PartialEmoji = None
-    CARET_RIGHT: discord.PartialEmoji = None
+    ALERT: ClassVar[EmojiType] = None
+    LOG: ClassVar[EmojiType] = None
+    PACKAGE: ClassVar[EmojiType] = None
+    SHIELD: ClassVar[EmojiType] = None
+    SHIELD_LIGHT: ClassVar[EmojiType] = None
+    ROLLBACK: ClassVar[EmojiType] = None
+    DOT_GREEN: ClassVar[EmojiType] = None
+    DOT_RED: ClassVar[EmojiType] = None
+    DOT_YELLOW: ClassVar[EmojiType] = None
+    UP: ClassVar[EmojiType] = None
+    DOWN: ClassVar[EmojiType] = None
+    WRENCH: ClassVar[EmojiType] = None
+    GEAR: ClassVar[EmojiType] = None
+    WAVE: ClassVar[EmojiType] = None
+    ACTIVITY_UP: ClassVar[EmojiType] = None
+    ACTIVITY_DOWN: ClassVar[EmojiType] = None
+    CARET_LEFT: ClassVar[EmojiType] = None
+    CARET_RIGHT: ClassVar[EmojiType] = None
     
     @classmethod
     async def setup_async(cls, bot: discord.Client):

@@ -98,8 +98,8 @@ class SystemCog(commands.Cog):
             return
 
         try:
-            bot_settings = self.bot.config_repo.app_config.bot_settings if hasattr(self.bot, 'config_repo') else self.bot.config.get("bot_settings", {})
-            purge_limit = bot_settings.purge_limit if hasattr(bot_settings, 'purge_limit') else bot_settings.get("purge_limit", 1000)
+            bot_settings = self.bot.app_cfg.bot_settings
+            purge_limit = bot_settings.purge_limit
             deleted = await interaction.channel.purge(limit=purge_limit)
 
             count = len(deleted)

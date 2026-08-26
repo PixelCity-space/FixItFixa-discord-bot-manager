@@ -54,3 +54,42 @@ def test_i18n_missing_key_fallback():
     service = LocalizationService("hu")
     res = service.get("non_existent_key_12345")
     assert res == "non_existent_key_12345"
+
+def test_i18n_pluralization_english_days():
+    service = LocalizationService("en")
+    assert service.get("uptime_days", d=1) == "1 day ago"
+    assert service.get("uptime_days", d=5) == "5 days ago"
+
+def test_i18n_pluralization_english_hours_and_minutes():
+    service = LocalizationService("en")
+    assert service.get("uptime_hours", h=1) == "1 hour ago"
+    assert service.get("uptime_hours", h=3) == "3 hours ago"
+    assert service.get("uptime_minutes", m=1) == "1 minute ago"
+    assert service.get("uptime_minutes", m=12) == "12 minutes ago"
+
+def test_i18n_pluralization_english_activity_and_logs():
+    service = LocalizationService("en")
+    assert service.get("activity_text", count=1) == "Monitoring 1 bot..."
+    assert service.get("activity_text", count=4) == "Monitoring 4 bots..."
+    assert service.get("logs_header", name="Alpha", lines=1) == "**Alpha** last 1 line:"
+    assert service.get("logs_header", name="Alpha", lines=20) == "**Alpha** last 20 lines:"
+
+def test_i18n_pluralization_hungarian_behavior():
+    hu = LocalizationService("hu")
+    assert hu.get("uptime_days", d=1) == "1 napja"
+    assert hu.get("uptime_days", d=5) == "5 napja"
+
+def test_i18n_explicit_get_plural_method():
+    service = LocalizationService("en")
+    res_one = service.get_plural("uptime_hours", count=1, h=1)
+    res_other = service.get_plural("uptime_hours", count=5, h=5)
+    assert res_one == "1 hour ago"
+    assert res_other == "5 hours ago"
+
+def test_i18n_plural_category_evaluator():
+    service = LocalizationService("hu")
+    assert service.get_plural_category("hu", 1) == "other"
+    assert service.get_plural_category("hu", 5) == "other"
+    assert service.get_plural_category("en", 1) == "one"
+    assert service.get_plural_category("en", 0) == "other"
+    assert service.get_plural_category("en", 2) == "other"

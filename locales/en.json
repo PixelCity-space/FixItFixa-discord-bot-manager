@@ -1,15 +1,30 @@
 {
-    "activity_text": "Monitoring {count} bots...",
-    "activity_maintenance": "Maintaining {count} bots...",
+    "activity_text": {
+        "one": "Monitoring {count} bot...",
+        "other": "Monitoring {count} bots..."
+    },
+    "activity_maintenance": {
+        "one": "Maintaining {count} bot...",
+        "other": "Maintaining {count} bots..."
+    },
     "activity_resource": "{cpu}% CPU • {ram}MB RAM",
     "activity_network": "{ACTIVITY_DOWN}{down} • {ACTIVITY_UP}{up}",
     "activity_status": "All systems nominal 🔧",
     "bot_stopped_alert": "**{name}** ({id}) has stopped unexpectedly!\nWould you like me to restart it? Use `/restart bot_id:{id}` command.",
     "manager_status_header": "### Manager Status",
     "bots_status_header": "Managed Bots",
-    "uptime_days": "{d} days ago",
-    "uptime_hours": "{h} hours ago",
-    "uptime_minutes": "{m} minutes ago",
+    "uptime_days": {
+        "one": "{d} day ago",
+        "other": "{d} days ago"
+    },
+    "uptime_hours": {
+        "one": "{h} hour ago",
+        "other": "{h} hours ago"
+    },
+    "uptime_minutes": {
+        "one": "{m} minute ago",
+        "other": "{m} minutes ago"
+    },
     "uptime_short": "Up",
     "cpu": "CPU",
     "ram": "RAM",
@@ -23,9 +38,15 @@
     "update_success": "**Update successful in the shared folder!** (FETCH_HEAD)",
     "restart_success": "**{name}** restarted (PID: {pid})",
     "restart_error": "**{name}** error: {error}",
-    "logs_header": "**{name}** last {lines} lines:",
+    "logs_header": {
+        "one": "**{name}** last {lines} line:",
+        "other": "**{name}** last {lines} lines:"
+    },
     "logs_full_header": "**{name}** full log:",
-    "manager_logs_header": "**Bot Manager** last {lines} lines:",
+    "manager_logs_header": {
+        "one": "**Bot Manager** last {lines} line:",
+        "other": "**Bot Manager** last {lines} lines:"
+    },
     "manager_logs_full_header": "**Bot Manager** full log:",
     "manager_restart_msg": "Restarting **{name}**... (PID: {pid})",
     "manager_online_log": "**{name}** is back online and monitoring! (PID: {pid})",
@@ -53,6 +74,7 @@
     "error_admin_channel_only": "This can only be used in the admin channel.",
     "error_inspector_only": "You do not have permission for this action, Inspector!",
     "error_command_failed": "An error occurred: `{error}`",
+    "rate_limit_alert": "⏳ Please wait {seconds}s before performing another action!",
     "status_running": "Running",
     "status_uncertain": "Status Uncertain (Access Denied)",
     "status_stopped": "Not Running",

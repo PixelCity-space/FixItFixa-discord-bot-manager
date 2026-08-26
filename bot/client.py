@@ -22,77 +22,34 @@ from core.services.update_service import UpdateService
 from core.services.health_service import HealthService
 from core.services.telemetry_service import TelemetryService
 
+from core.container import ServiceContainer
+
 class BotManager(commands.Bot):
     """Clean BotManager class responsible for Discord lifecycle, presence, and extension loading."""
-    def __init__(self, base_dir: str = None):
+    def __init__(self, base_dir: str = None, container: ServiceContainer = None):
         self.base_dir = os.path.abspath(base_dir) if base_dir else os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-        config_path = os.path.join(self.base_dir, "config.json")
-        state_path = os.path.join(self.base_dir, "state.json")
 
-        # 1. Load Configuration & State Repositories
-        self.config_repo = ConfigRepository(config_path)
-        self.state_repo = StateRepository(state_path)
-        self.app_cfg = self.config_repo.app_config
+        # 1. Dependency Injection / Service Container
+        self.container = container or ServiceContainer.create_default(
+            base_dir=self.base_dir,
+            notify_callback=self.notify_admin,
+            alert_callback=self._handle_bot_crash
+        )
 
+        # 2. Extract configuration metadata
+        self.app_cfg = self.container.app_config
+        self.config_repo = self.container.config_repo
+        self.state_repo = self.container.state_repo
         self.config = self.config_repo.raw
         self.state = self.state_repo.raw
         self.bots = self.app_cfg.bots
 
         bot_settings = self.app_cfg.bot_settings
-
-        # 2. Reconfigure logger
-        log_file = bot_settings.manager_log_file
-        max_bytes = bot_settings.log_max_bytes
-        backup_count = bot_settings.log_backup_count
-        reconfigure_log(log_file, max_bytes, backup_count)
-
-        log.info(f"[BotManager] Initialized with config from: {config_path}")
-
-        # 3. Setup Icons & Localization
-        Icons.setup(self.config.get("bot_settings", {}))
         self.language = bot_settings.language
-        self.i18n = LocalizationService(self.language)
-
+        self.i18n = self.container.i18n
         self.ui_settings = self.app_cfg.ui_settings
-        self.start_time = datetime.datetime.now()
-        self.activity_index = 0
-        self.last_net_io = psutil.net_io_counters()
-        self.last_net_time = datetime.datetime.now()
 
-        # 4. Initialize Core Infrastructure & Services
-        self.log_rotator = LogRotator(bot_settings.bot_log_max_bytes, bot_settings.bot_log_backup_count)
-        self.spawner = ProcessSpawner(bot_settings.stop_timeout, bot_settings.restart_wait, log_rotator=self.log_rotator)
-        self.tracker = ProcessTracker()
-        self.metrics_collector = MetricsCollector()
-        self.git_client = GitClient(bot_settings.requirements_file, bot_settings.rollback_ref)
-
-        self.lifecycle_service = BotLifecycleService(
-            config=self.app_cfg,
-            spawner=self.spawner,
-            tracker=self.tracker,
-            notify_callback=self.notify_admin
-        )
-        self.update_service = UpdateService(
-            config=self.app_cfg,
-            git_client=self.git_client,
-            lifecycle_service=self.lifecycle_service,
-            manager_root=self.base_dir
-        )
-        self.health_service = HealthService(
-            config=self.app_cfg,
-            tracker=self.tracker,
-            spawner=self.spawner,
-            alert_callback=self._handle_bot_crash
-        )
-        self.telemetry_service = TelemetryService(
-            config=self.app_cfg,
-            tracker=self.tracker,
-            metrics_collector=self.metrics_collector,
-            i18n=self.i18n,
-            start_time=self.start_time
-        )
-
-        # 5. Access Control
+        # 3. Access Control & Properties
         self.guild_id = self.app_cfg.guild_id
         self.access_control = self.app_cfg.access_control
         self.admin_channel_id = self.app_cfg.access_control.admin_channel_id
@@ -105,7 +62,23 @@ class BotManager(commands.Bot):
         self.command_prefix = bot_settings.command_prefix
         self.command_suffix = bot_settings.command_suffix
 
-        # 6. Discord Intents & Base Init
+        self.start_time = datetime.datetime.now()
+        self.activity_index = 0
+        self.last_net_io = psutil.net_io_counters()
+        self.last_net_time = datetime.datetime.now()
+
+        # 4. Service References for Backward Compatibility with Cogs and Tests
+        self.spawner = self.container.spawner
+        self.tracker = self.container.tracker
+        self.metrics_collector = self.container.metrics_collector
+        self.git_client = self.container.git_client
+        self.log_rotator = self.container.log_rotator
+        self.lifecycle_service = self.container.lifecycle_service
+        self.update_service = self.container.update_service
+        self.health_service = self.container.health_service
+        self.telemetry_service = self.container.telemetry_service
+
+        # 5. Discord Intents & Base Init
         intents = discord.Intents.default()
         intents.members = True
         intents.message_content = True
@@ -137,17 +110,27 @@ class BotManager(commands.Bot):
         alert_msg = get_feedback(self.i18n, "bot_stopped_alert", name=bot_cfg.name, id=bot_id)
         await self.notify_admin(alert_msg)
 
-    async def notify_admin(self, msg):
+    async def notify_admin(self, msg: str):
         """Sends a message to the designated administrative Discord channel."""
         if self.admin_channel_id:
             channel = self.get_channel(int(self.admin_channel_id))
             if not channel:
                 try:
                     channel = await self.fetch_channel(int(self.admin_channel_id))
-                except Exception:
-                    pass
+                except (discord.NotFound, discord.Forbidden) as e:
+                    log.warning(f"[BotManager] Admin channel {self.admin_channel_id} not found or forbidden: {e}")
+                    return
+                except discord.HTTPException as e:
+                    log.error(f"[BotManager] HTTP error fetching admin channel {self.admin_channel_id}: {e}")
+                    return
+                except Exception as e:
+                    log.debug(f"[BotManager] Error fetching admin channel {self.admin_channel_id}: {e}")
+                    return
             if channel:
-                await channel.send(msg)
+                try:
+                    await channel.send(msg)
+                except discord.HTTPException as e:
+                    log.error(f"[BotManager] Failed to send notification to admin channel: {e}")
 
     @tasks.loop(seconds=30)
     async def update_activity_task(self):
@@ -331,8 +314,10 @@ class BotManager(commands.Bot):
         try:
             msg = get_feedback(self.i18n, "error_command_failed", error=str(error))
             await ctx.send(msg)
-        except Exception:
-            pass
+        except (discord.Forbidden, discord.HTTPException) as e:
+            log.debug(f"[Prefix] Could not send error feedback to channel: {e}")
+        except Exception as e:
+            log.debug(f"[Prefix] Unexpected error dispatching error feedback: {e}")
 
     @tasks.loop(seconds=60)
     async def check_processes(self):
