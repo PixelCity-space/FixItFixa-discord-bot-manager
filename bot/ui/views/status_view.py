@@ -16,10 +16,17 @@ class StatusContainer(Container):
         update_emoji = Icons.UPDATE
         stop_emoji = Icons.STOP
 
+        # Core localization labels
+        cpu_label = get_feedback(i18n, "cpu")
+        ram_label = get_feedback(i18n, "ram")
+        log_label = get_feedback(i18n, "log_size")
+        path_label = get_feedback(i18n, "path")
+        cluster_label = get_feedback(i18n, "cluster")
+        net_label = get_feedback(i18n, "net")
+        db_label = get_feedback(i18n, "db")
+
         # 1. Manager Statistics (Only on Page 1 / index 0)
         if page == 0:
-            cpu_label = get_feedback(i18n, "cpu")
-            ram_label = get_feedback(i18n, "ram")
             host_label = get_feedback(i18n, "host_os")
             free_label = get_feedback(i18n, "system_free")
             disk_label = get_feedback(i18n, "disk")
@@ -31,8 +38,8 @@ class StatusContainer(Container):
                 f"**{get_feedback(i18n, 'status_running')}** | PID: `{os.getpid()}`\n"
                 f"{get_feedback(i18n, 'uptime')}: {manager_stats['uptime']} | {server_up_label}: {manager_stats['host_uptime']}\n"
                 f"{get_feedback(i18n, 'branch')}: `{manager_stats['branch']}` | {host_label}: `{manager_stats['os']}`\n"
-                f"{get_feedback(i18n, 'resources')}: {cpu_label}: `{manager_stats['cpu']}%` | {ram_label}: `{int(manager_stats['ram'])} MB` | Net: `{manager_stats['net']}`\n"
-                f"{free_label}: CPU: `{int(manager_stats['sys_cpu_free'])}%` | {ram_label}: `{int(manager_stats['sys_ram_free'])} MB` | {disk_label}: `{int(manager_stats['sys_disk_free'])} GB` | {swap_label}: `{manager_stats['swap']}%`"
+                f"{get_feedback(i18n, 'resources')}: {cpu_label}: `{manager_stats['cpu']}%` | {ram_label}: `{int(manager_stats['ram'])} MB` | {net_label}: `{manager_stats['net']}`\n"
+                f"{free_label}: {cpu_label}: `{int(manager_stats['sys_cpu_free'])}%` | {ram_label}: `{int(manager_stats['sys_ram_free'])} MB` | {disk_label}: `{int(manager_stats['sys_disk_free'])} GB` | {swap_label}: `{manager_stats['swap']}%`"
             )
             self.add_item(TextDisplay(manager_text))
 
@@ -65,7 +72,8 @@ class StatusContainer(Container):
 
             for i, (path, members) in enumerate(paged_groups):
                 if i == 0:
-                    header = f"**{get_feedback(i18n, 'bots_status_header')} (Page {page+1})**"
+                    page_str = get_feedback(i18n, "page_indicator", page=page + 1)
+                    header = f"**{get_feedback(i18n, 'bots_status_header')} {page_str}**"
                     self.add_item(TextDisplay(header))
                     self.add_item(Separator())
 
@@ -74,7 +82,7 @@ class StatusContainer(Container):
 
                 if len(members) > 1:
                     # Cluster View
-                    cluster_title = f"**Cluster • {os.path.basename(path)}**{up_alert}\n`Path: {path}`"
+                    cluster_title = f"**{cluster_label} • {os.path.basename(path)}**{up_alert}\n`{path_label}: {path}`"
                     self.add_item(TextDisplay(cluster_title))
 
                     cluster_row = ActionRow()
@@ -87,9 +95,9 @@ class StatusContainer(Container):
                     member_details = []
                     for m_id, m_info in members:
                         if m_info.get("is_running"):
-                            stats = f"CPU: `{m_info['cpu']}%` | RAM: `{int(m_info['ram'])}MB` | Log: `{m_info['log_size']}`"
+                            stats = f"{cpu_label}: `{m_info['cpu']}%` | {ram_label}: `{int(m_info['ram'])}MB` | {log_label}: `{m_info['log_size']}`"
                         else:
-                            stats = f"Log: `{m_info['log_size']}`"
+                            stats = f"{log_label}: `{m_info['log_size']}`"
                         member_details.append(f"**{m_info['status']} • {m_info['name']}**\n{stats}")
                     self.add_item(TextDisplay("\n".join(member_details)))
                 else:
@@ -107,22 +115,22 @@ class StatusContainer(Container):
                     self.add_item(bot_row)
 
                     if b_info.get("is_running"):
-                        details = f"CPU: `{b_info.get('cpu', 0)}%` | RAM: `{int(b_info.get('ram', 0))} MB` | {get_feedback(i18n, 'uptime_short')}: {b_info.get('uptime', '0s')}"
-                        details += f"\n`Path: {b_info['path']}`"
-                        details += f"\nLog: `{b_info.get('log_size', '0B')}`"
+                        details = f"{cpu_label}: `{b_info.get('cpu', 0)}%` | {ram_label}: `{int(b_info.get('ram', 0))} MB` | {get_feedback(i18n, 'uptime_short')}: {b_info.get('uptime', '0s')}"
+                        details += f"\n`{path_label}: {b_info['path']}`"
+                        details += f"\n{log_label}: `{b_info.get('log_size', '0B')}`"
                         if b_info.get("db_sizes"):
                             db_parts = " | ".join([f"`{name}`: `{size}`" for name, size in b_info["db_sizes"].items()])
-                            details += f" | DB: {db_parts}"
+                            details += f" | {db_label}: {db_parts}"
                     else:
-                        details = f"`Path: {b_info['path']}`"
-                        details += f"\n{get_feedback(i18n, 'log_size')}: `{b_info.get('log_size', '0B')}`"
+                        details = f"`{path_label}: {b_info['path']}`"
+                        details += f"\n{log_label}: `{b_info.get('log_size', '0B')}`"
 
                     self.add_item(TextDisplay(details))
 
                 if i < len(group_list) - 1:
                     self.add_item(Separator())
         else:
-            self.add_item(TextDisplay(f"*{i18n.get('error_no_bots_configured', 'No bots configured.')}*"))
+            self.add_item(TextDisplay(f"*{get_feedback(i18n, 'error_no_bots_configured')}*"))
 
 class ModernStatusView(LayoutView):
     """A modern status view for managed bots using Components V2 layout."""

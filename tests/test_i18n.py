@@ -93,3 +93,22 @@ def test_i18n_plural_category_evaluator():
     assert service.get_plural_category("en", 1) == "one"
     assert service.get_plural_category("en", 0) == "other"
     assert service.get_plural_category("en", 2) == "other"
+
+def test_i18n_page_localization():
+    hu = LocalizationService("hu")
+    assert hu.get("page_indicator", page=1) == "(1. oldal)"
+    assert hu.get("page_number", page=2) == "2. oldal"
+    assert get_feedback(hu, "page_indicator", page=1) == "(1. oldal)"
+    assert hu.get("cluster") == "Klaszter"
+    assert hu.get("net") == "Net"
+    assert hu.get("db") == "DB"
+    assert hu.get("path") == "Útvonal"
+
+    en = LocalizationService("en")
+    assert en.get("page_indicator", page=1) == "(Page 1)"
+    assert en.get("page_number", page=2) == "Page 2"
+    assert get_feedback(en, "page_indicator", page=1) == "(Page 1)"
+    assert en.get("cluster") == "Cluster"
+    assert en.get("net") == "Net"
+    assert en.get("db") == "DB"
+    assert en.get("path") == "Path"

@@ -13,6 +13,8 @@
     "bot_stopped_alert": "**{name}** ({id}) has stopped unexpectedly!\nWould you like me to restart it? Use `/restart bot_id:{id}` command.",
     "manager_status_header": "### Manager Status",
     "bots_status_header": "Managed Bots",
+    "page_indicator": "(Page {page})",
+    "page_number": "Page {page}",
     "uptime_days": {
         "one": "{d} day ago",
         "other": "{d} days ago"
@@ -113,6 +115,9 @@
     "branch": "Branch",
     "resources": "Resources",
     "path": "Path",
+    "cluster": "Cluster",
+    "net": "Net",
+    "db": "DB",
     "hash": "Hash",
     "author": "Author",
     "date": "Date",

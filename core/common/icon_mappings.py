@@ -53,6 +53,11 @@ ICON_KEY_MAP = {
     # --- Headers & UI Labels ---
     "manager_status_header": "",
     "bots_status_header": "",
+    "page_indicator": "",
+    "page_number": "",
+    "cluster": "",
+    "net": "",
+    "db": "",
     "logs_header": "LOG",
     "logs_full_header": "LOG",
     "manager_logs_header": "LOG",
