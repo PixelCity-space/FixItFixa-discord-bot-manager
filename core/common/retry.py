@@ -1,11 +1,15 @@
 """Retry mechanisms with exponential backoff and jitter for transient failures."""
-import time
+
 import asyncio
 import random
-from typing import Callable, TypeVar, Tuple, Type, Any, Optional
+import time
+from collections.abc import Callable
+from typing import Any, TypeVar
+
 from core.logger import log
 
 T = TypeVar("T")
+
 
 def retry_sync(
     fn: Callable[..., T],
@@ -13,12 +17,12 @@ def retry_sync(
     initial_delay: float = 0.5,
     backoff_factor: float = 2.0,
     jitter: bool = True,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    on_retry: Optional[Callable[[Exception, int, float], None]] = None
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+    on_retry: Callable[[Exception, int, float], None] | None = None,
 ) -> T:
     """Executes a synchronous function with exponential backoff retry on failure."""
     delay = initial_delay
-    last_exception: Optional[Exception] = None
+    last_exception: Exception | None = None
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -42,18 +46,19 @@ def retry_sync(
         raise last_exception
     raise RuntimeError("Unexpected exit in retry_sync")
 
+
 async def retry_async(
     coro_fn: Callable[..., Any],
     max_retries: int = 3,
     initial_delay: float = 0.5,
     backoff_factor: float = 2.0,
     jitter: bool = True,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    on_retry: Optional[Callable[[Exception, int, float], None]] = None
+    exceptions: tuple[type[Exception], ...] = (Exception,),
+    on_retry: Callable[[Exception, int, float], None] | None = None,
 ) -> Any:
     """Executes an asynchronous coroutine with exponential backoff retry on failure."""
     delay = initial_delay
-    last_exception: Optional[Exception] = None
+    last_exception: Exception | None = None
 
     for attempt in range(1, max_retries + 1):
         try:
@@ -68,7 +73,9 @@ async def retry_async(
             if on_retry:
                 on_retry(e, attempt, sleep_time)
             else:
-                log.debug(f"[RetryAsync] Attempt {attempt}/{max_retries} failed ({e}). Retrying in {sleep_time:.2f}s...")
+                log.debug(
+                    f"[RetryAsync] Attempt {attempt}/{max_retries} failed ({e}). Retrying in {sleep_time:.2f}s..."
+                )
 
             await asyncio.sleep(sleep_time)
             delay *= backoff_factor
@@ -76,6 +83,7 @@ async def retry_async(
     if last_exception:
         raise last_exception
     raise RuntimeError("Unexpected exit in retry_async")
+
 
 __all__ = [
     "retry_sync",

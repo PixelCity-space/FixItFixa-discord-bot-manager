@@ -1,32 +1,36 @@
-import os
 import datetime
-from typing import Dict, Any, Type, TypeVar, Optional, Callable
-from core.logger import log, reconfigure_log
-from core.icons import Icons
+import os
+from collections.abc import Callable
+from typing import Any, TypeVar
+
 from core.config.config_repository import ConfigRepository
-from core.config.state_repository import StateRepository
 from core.config.models import AppConfig
+from core.config.state_repository import StateRepository
+from core.icons import Icons
+from core.logger import log, reconfigure_log
+from core.services.bot_lifecycle_service import BotLifecycleService
+from core.services.health_service import HealthService
 from core.services.i18n_service import LocalizationService
-from core.system.process_spawner import ProcessSpawner
-from core.system.process_tracker import ProcessTracker
-from core.system.metrics_collector import MetricsCollector
+from core.services.metrics_exporter import MetricsServer
+from core.services.telemetry_service import TelemetryService
+from core.services.update_service import UpdateService
 from core.system.git_client import GitClient
 from core.system.log_rotator import LogRotator
-from core.services.bot_lifecycle_service import BotLifecycleService
-from core.services.update_service import UpdateService
-from core.services.health_service import HealthService
-from core.services.telemetry_service import TelemetryService
+from core.system.metrics_collector import MetricsCollector
+from core.system.process_spawner import ProcessSpawner
+from core.system.process_tracker import ProcessTracker
 
 T = TypeVar("T")
+
 
 class ServiceContainer:
     """Dependency Injection and Service Registry Container for managing subsystem lifecycles and wiring."""
 
     def __init__(self):
-        self._services: Dict[str, Any] = {}
-        self._types: Dict[Type, Any] = {}
+        self._services: dict[str, Any] = {}
+        self._types: dict[type, Any] = {}
 
-    def register(self, key: str, service: Any, service_type: Optional[Type] = None) -> None:
+    def register(self, key: str, service: Any, service_type: type | None = None) -> None:
         """Registers a service instance by string key and optionally by type."""
         self._services[key] = service
         if service_type is not None:
@@ -50,11 +54,8 @@ class ServiceContainer:
 
     @classmethod
     def create_default(
-        cls,
-        base_dir: str,
-        notify_callback: Optional[Callable] = None,
-        alert_callback: Optional[Callable] = None
-    ) -> 'ServiceContainer':
+        cls, base_dir: str, notify_callback: Callable | None = None, alert_callback: Callable | None = None
+    ) -> "ServiceContainer":
         """Builds and wires the complete production dependency graph."""
         container = cls()
         base_dir = os.path.abspath(base_dir)
@@ -73,11 +74,7 @@ class ServiceContainer:
         container.register("app_cfg", app_cfg, AppConfig)
 
         # 2. Logger Reconfiguration
-        reconfigure_log(
-            bot_settings.manager_log_file,
-            bot_settings.log_max_bytes,
-            bot_settings.log_backup_count
-        )
+        reconfigure_log(bot_settings.manager_log_file, bot_settings.log_max_bytes, bot_settings.log_backup_count)
 
         # 3. Icons & Localization
         Icons.setup(app_cfg.raw_config.get("bot_settings", {}))
@@ -99,35 +96,31 @@ class ServiceContainer:
 
         # 5. Core Business Services
         lifecycle_service = BotLifecycleService(
-            config=app_cfg,
-            spawner=spawner,
-            tracker=tracker,
-            notify_callback=notify_callback
+            config=app_cfg, spawner=spawner, tracker=tracker, notify_callback=notify_callback
         )
         update_service = UpdateService(
-            config=app_cfg,
-            git_client=git_client,
-            lifecycle_service=lifecycle_service,
-            manager_root=base_dir
+            config=app_cfg, git_client=git_client, lifecycle_service=lifecycle_service, manager_root=base_dir
         )
-        health_service = HealthService(
-            config=app_cfg,
-            tracker=tracker,
-            spawner=spawner,
-            alert_callback=alert_callback
-        )
+        health_service = HealthService(config=app_cfg, tracker=tracker, spawner=spawner, alert_callback=alert_callback)
         telemetry_service = TelemetryService(
             config=app_cfg,
             tracker=tracker,
             metrics_collector=metrics_collector,
             i18n=i18n,
-            start_time=datetime.datetime.now()
+            start_time=datetime.datetime.now(),
+        )
+        metrics_server = MetricsServer(
+            telemetry_service=telemetry_service,
+            host=bot_settings.metrics_host,
+            port=bot_settings.metrics_port,
+            enabled=bot_settings.metrics_enabled,
         )
 
         container.register("lifecycle_service", lifecycle_service, BotLifecycleService)
         container.register("update_service", update_service, UpdateService)
         container.register("health_service", health_service, HealthService)
         container.register("telemetry_service", telemetry_service, TelemetryService)
+        container.register("metrics_server", metrics_server, MetricsServer)
 
         log.info("[ServiceContainer] Production service graph assembled successfully.")
         return container
@@ -185,5 +178,10 @@ class ServiceContainer:
     @property
     def telemetry_service(self) -> TelemetryService:
         return self.get("telemetry_service")
+
+    @property
+    def metrics_server(self) -> MetricsServer:
+        return self.get("metrics_server")
+
 
 __all__ = ["ServiceContainer"]

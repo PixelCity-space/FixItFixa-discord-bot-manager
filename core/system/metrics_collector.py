@@ -1,20 +1,24 @@
-import os
-import psutil
 import datetime
+import os
 import platform
 import shutil
-from typing import Dict, Any, Tuple
+from typing import Any
+
+import psutil
+
 from core.logger import log
+
 
 class MetricsCollector:
     """Collects system-wide hardware and OS metrics."""
+
     def __init__(self):
         self.last_net_io = psutil.net_io_counters()
         self.last_net_time = datetime.datetime.now()
 
     def get_os_info(self) -> str:
         """Determines the operating system pretty name."""
-        if os.name == 'posix':
+        if os.name == "posix":
             try:
                 with open("/etc/os-release") as f:
                     lines = f.readlines()
@@ -37,7 +41,7 @@ class MetricsCollector:
             return f"{bytes_per_sec / (1024 * 1024):.1f} MB/s"
         return f"{bytes_per_sec / 1024:.1f} KB/s"
 
-    def calculate_network_speed(self) -> Tuple[float, float, str]:
+    def calculate_network_speed(self) -> tuple[float, float, str]:
         """Calculates download and upload bandwidth speeds."""
         now = datetime.datetime.now()
         net_now = psutil.net_io_counters()
@@ -55,7 +59,7 @@ class MetricsCollector:
         net_str = f"↓ {self.format_speed(down_speed)} | ↑ {self.format_speed(up_speed)}"
         return down_speed, up_speed, net_str
 
-    def get_system_metrics(self) -> Dict[str, Any]:
+    def get_system_metrics(self) -> dict[str, Any]:
         """Gathers comprehensive host system metrics."""
         try:
             os_name = self.get_os_info()
@@ -91,7 +95,7 @@ class MetricsCollector:
                 "sys_disk_free": sys_disk_free,
                 "swap": sys_swap_percent,
                 "host_uptime_sec": host_uptime_sec,
-                "net": net_str
+                "net": net_str,
             }
         except Exception as e:
             log.warning(f"[MetricsCollector] Failed to collect system metrics: {e}")
@@ -103,5 +107,5 @@ class MetricsCollector:
                 "sys_disk_free": 0.0,
                 "swap": 0.0,
                 "host_uptime_sec": 0.0,
-                "net": "Error"
+                "net": "Error",
             }

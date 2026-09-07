@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 
+
 async def bot_id_autocomplete(
     interaction: discord.Interaction,
     current: str,
@@ -30,7 +31,7 @@ async def bot_id_autocomplete(
                 path_groups[path] = []
             path_groups[path].append((bot_id, bot_config.name))
 
-        for path, bots_in_group in path_groups.items():
+        for _path, bots_in_group in path_groups.items():
             if len(bots_in_group) > 1:
                 combined_name = " + ".join([b[1] for b in bots_in_group])
                 representative_id = bots_in_group[0][0]
@@ -42,5 +43,6 @@ async def bot_id_autocomplete(
                     choices.append(app_commands.Choice(name=name, value=bot_id))
 
     return choices[:25]
+
 
 __all__ = ["bot_id_autocomplete"]

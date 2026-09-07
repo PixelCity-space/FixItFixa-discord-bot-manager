@@ -9,17 +9,19 @@ DISCORD_TRUNCATE_TAIL_CHARS = 800
 DISCORD_TRUNCATE_OUTPUT_HEAD = 700
 DISCORD_TRUNCATE_OUTPUT_TAIL = 700
 
+
 def truncate_message(
     text: str,
     max_len: int = DISCORD_TRUNCATE_LIMIT,
     head_len: int = DISCORD_TRUNCATE_HEAD_CHARS,
     tail_len: int = DISCORD_TRUNCATE_TAIL_CHARS,
-    separator: str = "\n\n... [TRUNCATED] ...\n\n"
+    separator: str = "\n\n... [TRUNCATED] ...\n\n",
 ) -> str:
     """Safely truncates long text payloads to fit within Discord message limits."""
     if not text or len(text) <= max_len:
         return text
     return f"{text[:head_len]}{separator}{text[-tail_len:]}"
+
 
 __all__ = [
     "DISCORD_MAX_MESSAGE_LENGTH",

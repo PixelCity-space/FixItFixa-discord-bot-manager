@@ -1,6 +1,6 @@
 from bot.ui.components import BotControlButton, PageButton, handle_status_interaction
 from bot.ui.embeds import UpdateResultEmbed
-from bot.ui.views import ModernStatusView, StatusContainer, ModernInfoView
+from bot.ui.views import ModernInfoView, ModernStatusView, StatusContainer
 
 __all__ = [
     "BotControlButton",
@@ -9,5 +9,5 @@ __all__ = [
     "UpdateResultEmbed",
     "ModernStatusView",
     "StatusContainer",
-    "ModernInfoView"
+    "ModernInfoView",
 ]

@@ -1,12 +1,15 @@
 import discord
+
 from core.utils import get_feedback
+
 
 class UpdateResultEmbed(discord.Embed):
     """A premium embed for displaying git update and rollback results."""
+
     def __init__(self, i18n, title, details, ui_settings=None, is_rollback=False):
-        color_val = 0x2ecc71  # Green default
+        color_val = 0x2ECC71  # Green default
         if is_rollback:
-            color_val = 0xe67e22  # Orange default
+            color_val = 0xE67E22  # Orange default
 
         if ui_settings:
             if is_rollback:
@@ -18,7 +21,7 @@ class UpdateResultEmbed(discord.Embed):
             title=title,
             description=f"**{details['message']}**" if details else get_feedback(i18n, "update_success"),
             color=discord.Color(color_val),
-            timestamp=discord.utils.utcnow()
+            timestamp=discord.utils.utcnow(),
         )
 
         if details:
@@ -32,6 +35,8 @@ class UpdateResultEmbed(discord.Embed):
 
             if details.get("repo_url"):
                 label = get_feedback(i18n, "open_on_web")
-                self.add_field(name=get_feedback(i18n, "git_repo"), value=f"[{label}]({details['repo_url']})", inline=False)
+                self.add_field(
+                    name=get_feedback(i18n, "git_repo"), value=f"[{label}]({details['repo_url']})", inline=False
+                )
 
         self.set_footer(text=get_feedback(i18n, "update_footer"))

@@ -1,19 +1,22 @@
-import os
-import io
 import asyncio
-from collections import deque
+import io
+import os
+
 import discord
 from discord import app_commands
 from discord.ext import commands
-from core.logger import log
-from core.utils import get_feedback
-from core.common.constants import truncate_message
-from bot.checks import is_admin_context, is_monitor_context
+
 from bot.autocomplete import bot_id_autocomplete
+from bot.checks import is_admin_context, is_monitor_context
 from bot.ui.embeds.update_result import UpdateResultEmbed
+from core.common.constants import truncate_message
+from core.logger import log
+from core.utils import get_feedback, read_file_tail
+
 
 class ManagementCog(commands.Cog):
     """Admin and Dev commands for managing child bots and the manager."""
+
     def __init__(self, bot):
         self.bot = bot
 
@@ -50,7 +53,9 @@ class ManagementCog(commands.Cog):
                 msgs.append(get_feedback(self.bot.i18n, "restart_error", name=b_cfg.name, error=err or "Unknown error"))
             else:
                 msgs.append(get_feedback(self.bot.i18n, "restart_success", name=b_cfg.name, pid=pid))
-                await self.bot.notify_admin(get_feedback(self.bot.i18n, "bot_online_log", name=b_cfg.name, id=b_cfg.id, pid=pid))
+                await self.bot.notify_admin(
+                    get_feedback(self.bot.i18n, "bot_online_log", name=b_cfg.name, id=b_cfg.id, pid=pid)
+                )
         result = "\n".join(msgs)
 
         await interaction.followup.send(result, ephemeral=False)
@@ -97,9 +102,11 @@ class ManagementCog(commands.Cog):
         pid = await self.bot.lifecycle_service.start_bot(bot_id)
         if pid:
             result = get_feedback(self.bot.i18n, "restart_success", name=bot.name, pid=pid)
-            await self.bot.notify_admin(get_feedback(self.bot.i18n, "bot_online_log", name=bot.name, id=bot.id, pid=pid))
+            await self.bot.notify_admin(
+                get_feedback(self.bot.i18n, "bot_online_log", name=bot.name, id=bot.id, pid=pid)
+            )
         else:
-            err = getattr(self.bot.spawner, 'last_error', None) or "Failed to start bot"
+            err = getattr(self.bot.spawner, "last_error", None) or "Failed to start bot"
             result = get_feedback(self.bot.i18n, "restart_error", name=bot.name, error=err)
 
         await interaction.followup.send(result, ephemeral=False)
@@ -144,9 +151,7 @@ class ManagementCog(commands.Cog):
         if os.path.exists(log_path):
             try:
                 if lines > 0:
-                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                        last_lines = deque(f, maxlen=lines)
-
+                    last_lines = await asyncio.to_thread(read_file_tail, log_path, lines)
                     content = "".join(last_lines)
                     if not content:
                         await interaction.followup.send(get_feedback(self.bot.i18n, "error_log_empty"), ephemeral=True)
@@ -161,9 +166,13 @@ class ManagementCog(commands.Cog):
                     header = get_feedback(self.bot.i18n, "logs_full_header", name=bot.name)
                     await interaction.followup.send(header, file=file, ephemeral=True)
             except Exception as e:
-                await interaction.followup.send(get_feedback(self.bot.i18n, "error_log_fetch", error=str(e)), ephemeral=True)
+                await interaction.followup.send(
+                    get_feedback(self.bot.i18n, "error_log_fetch", error=str(e)), ephemeral=True
+                )
         else:
-            await interaction.followup.send(get_feedback(self.bot.i18n, "error_log_not_found", path=log_path), ephemeral=True)
+            await interaction.followup.send(
+                get_feedback(self.bot.i18n, "error_log_not_found", path=log_path), ephemeral=True
+            )
 
     @app_commands.command(name="manager-logs", description="[Bot Dev] Get last N lines of the Bot Manager log.")
     @app_commands.describe(lines="Number of lines")
@@ -181,12 +190,12 @@ class ManagementCog(commands.Cog):
         if os.path.exists(log_path):
             try:
                 if lines > 0:
-                    with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                        last_lines = deque(f, maxlen=lines)
-
+                    last_lines = await asyncio.to_thread(read_file_tail, log_path, lines)
                     content = "".join(last_lines)
                     if not content:
-                        await interaction.followup.send(get_feedback(self.bot.i18n, "error_manager_log_empty"), ephemeral=True)
+                        await interaction.followup.send(
+                            get_feedback(self.bot.i18n, "error_manager_log_empty"), ephemeral=True
+                        )
                         return
 
                     buffer = io.BytesIO(content.encode("utf-8"))
@@ -198,7 +207,9 @@ class ManagementCog(commands.Cog):
                     header = get_feedback(self.bot.i18n, "manager_logs_full_header")
                     await interaction.followup.send(header, file=file, ephemeral=False)
             except Exception as e:
-                await interaction.followup.send(get_feedback(self.bot.i18n, "error_log_fetch", error=str(e)), ephemeral=True)
+                await interaction.followup.send(
+                    get_feedback(self.bot.i18n, "error_log_fetch", error=str(e)), ephemeral=True
+                )
         else:
             await interaction.followup.send(get_feedback(self.bot.i18n, "error_manager_log_not_found"), ephemeral=True)
 
@@ -215,9 +226,10 @@ class ManagementCog(commands.Cog):
             return
 
         bot = self.bot.bots[bot_id]
-        log_rotator = getattr(self.bot, 'log_rotator', None)
+        log_rotator = getattr(self.bot, "log_rotator", None)
         if not log_rotator:
             from core.system.log_rotator import LogRotator
+
             log_rotator = LogRotator()
 
         rotated, msg = log_rotator.rotate_bot_log(bot, force=force)
@@ -227,7 +239,9 @@ class ManagementCog(commands.Cog):
             log_path = os.path.join(bot.path, bot.log)
             cur_size = f"{os.path.getsize(log_path) / (1024 * 1024):.2f} MB" if os.path.exists(log_path) else "0 MB"
             max_size = f"{log_rotator.max_bytes / (1024 * 1024):.2f} MB"
-            response = get_feedback(self.bot.i18n, "logs_rotate_no_need", name=bot.name, size=cur_size, max_size=max_size)
+            response = get_feedback(
+                self.bot.i18n, "logs_rotate_no_need", name=bot.name, size=cur_size, max_size=max_size
+            )
 
         await interaction.followup.send(response, ephemeral=False)
 
@@ -283,7 +297,10 @@ class ManagementCog(commands.Cog):
 
         except Exception as e:
             log.error(f"Manager update failed: {e}")
-            await interaction.followup.send(get_feedback(self.bot.i18n, "error_update_general", error=str(e)), ephemeral=True)
+            await interaction.followup.send(
+                get_feedback(self.bot.i18n, "error_update_general", error=str(e)), ephemeral=True
+            )
+
 
 async def setup(bot):
     await bot.add_cog(ManagementCog(bot))

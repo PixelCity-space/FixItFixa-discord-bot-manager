@@ -1,17 +1,21 @@
-import os
+import contextlib
 import json
+import os
 import threading
-from typing import Optional, Dict, Any, List
-from core.logger import log
+from typing import Any
+
 from core.config.models import AppConfig, BotConfig
 from core.config.validator import ConfigValidator, ValidationError
+from core.logger import log
+
 
 class ConfigRepository:
     """Handles thread-safe, atomic persistent loading, validation, and saving of the application configuration."""
+
     def __init__(self, config_path: str = "config.json"):
         self.config_path = os.path.abspath(config_path)
         self._lock = threading.RLock()
-        self.validation_errors: List[ValidationError] = []
+        self.validation_errors: list[ValidationError] = []
         self.app_config: AppConfig = self.load()
 
     def load(self) -> AppConfig:
@@ -20,21 +24,27 @@ class ConfigRepository:
             self.validation_errors = []
             if os.path.exists(self.config_path):
                 try:
-                    with open(self.config_path, "r", encoding="utf-8") as f:
+                    with open(self.config_path, encoding="utf-8") as f:
                         raw = json.load(f)
 
                     # Validate configuration
                     self.validation_errors = ConfigValidator.validate(raw)
                     if self.validation_errors:
-                        log.warning(f"[ConfigRepository] Configuration contains {len(self.validation_errors)} validation issue(s):")
+                        log.warning(
+                            f"[ConfigRepository] Configuration contains {len(self.validation_errors)} validation issue(s):"
+                        )
                         for err in self.validation_errors:
                             log.warning(f"  - {err}")
 
                     self.app_config = AppConfig.from_dict(raw)
-                    log.info(f"[ConfigRepository] Loaded config from {self.config_path} with {len(self.app_config.bots)} bots.")
+                    log.info(
+                        f"[ConfigRepository] Loaded config from {self.config_path} with {len(self.app_config.bots)} bots."
+                    )
                     return self.app_config
                 except json.JSONDecodeError as e:
-                    log.error(f"[ConfigRepository] Corrupt JSON syntax in config file {self.config_path} (line {e.lineno}, col {e.colno}): {e.msg}")
+                    log.error(
+                        f"[ConfigRepository] Corrupt JSON syntax in config file {self.config_path} (line {e.lineno}, col {e.colno}): {e.msg}"
+                    )
                 except (PermissionError, OSError) as e:
                     log.error(f"[ConfigRepository] I/O or permission error accessing config at {self.config_path}: {e}")
                 except Exception as e:
@@ -45,15 +55,22 @@ class ConfigRepository:
             self.app_config = AppConfig()
             return self.app_config
 
-    def save(self, raw_data: Optional[Dict[str, Any]] = None) -> bool:
+    def save(self, raw_data: dict[str, Any] | None = None) -> bool:
         """Validates and saves current configuration to file atomically under lock."""
         with self._lock:
-            data_to_save = raw_data if raw_data is not None else self.app_config.raw_config
-            
+            if raw_data is not None:
+                data_to_save = raw_data
+            elif hasattr(self.app_config, "to_dict"):
+                data_to_save = self.app_config.to_dict()
+            else:
+                data_to_save = self.app_config.raw_config
+
             # Pre-save validation
             val_errors = ConfigValidator.validate(data_to_save)
             if val_errors:
-                log.error(f"[ConfigRepository] Cannot save invalid configuration ({len(val_errors)} validation errors):")
+                log.error(
+                    f"[ConfigRepository] Cannot save invalid configuration ({len(val_errors)} validation errors):"
+                )
                 for err in val_errors:
                     log.error(f"  - {err}")
                 return False
@@ -71,39 +88,39 @@ class ConfigRepository:
 
                 if raw_data is not None:
                     self.app_config = AppConfig.from_dict(raw_data)
+                else:
+                    self.app_config.raw_config = data_to_save
                 log.info(f"[ConfigRepository] Config saved successfully to {self.config_path}")
                 return True
             except (PermissionError, OSError) as e:
                 log.error(f"[ConfigRepository] I/O or permission error writing config to {self.config_path}: {e}")
                 if os.path.exists(tmp_path):
-                    try:
+                    with contextlib.suppress(OSError):
                         os.remove(tmp_path)
-                    except OSError:
-                        pass
                 return False
             except Exception as e:
                 log.error(f"[ConfigRepository] Unexpected error saving config to {self.config_path}: {e}")
                 if os.path.exists(tmp_path):
-                    try:
+                    with contextlib.suppress(OSError):
                         os.remove(tmp_path)
-                    except OSError:
-                        pass
                 return False
 
-    async def save_async(self, raw_data: Optional[Dict[str, Any]] = None) -> bool:
+    async def save_async(self, raw_data: dict[str, Any] | None = None) -> bool:
         """Asynchronously validates and saves configuration in a worker thread without blocking the event loop."""
         import asyncio
+
         return await asyncio.to_thread(self.save, raw_data)
 
-    def get_bot(self, bot_id: str) -> Optional[BotConfig]:
+    def get_bot(self, bot_id: str) -> BotConfig | None:
         """Gets a bot configuration by ID."""
         with self._lock:
             return self.app_config.bots.get(bot_id)
 
     @property
-    def raw(self) -> Dict[str, Any]:
+    def raw(self) -> dict[str, Any]:
         """Returns the raw dictionary format for backward compatibility."""
         with self._lock:
             return self.app_config.raw_config
+
 
 __all__ = ["ConfigRepository"]

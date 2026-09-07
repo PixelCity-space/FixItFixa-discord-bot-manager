@@ -1,15 +1,18 @@
-import os
 import json
+import os
 import re
-from typing import Optional, Dict, Any
+from typing import Any
+
 from core.logger import log
+
 
 class LocalizationService:
     """Manages multi-language translations, pluralization rules, and dynamic icon placeholder substitution."""
+
     def __init__(self, default_lang: str = "hu"):
         self.default_lang = default_lang
         self.current_lang = default_lang
-        self.translations: Dict[str, Any] = {}
+        self.translations: dict[str, Any] = {}
         log.debug(f"[LocalizationService] Initializing for {default_lang}")
         self.load_translations(default_lang)
         log.debug(f"[LocalizationService] Initialization for {default_lang} complete.")
@@ -32,7 +35,7 @@ class LocalizationService:
 
             if os.path.exists(file_path):
                 try:
-                    with open(file_path, "r", encoding="utf-8") as f:
+                    with open(file_path, encoding="utf-8") as f:
                         new_data = json.load(f)
                         self.translations.clear()
                         self.translations.update(new_data)
@@ -46,7 +49,7 @@ class LocalizationService:
                 root_fallback = os.path.join(base_dir, f"{lang}.json")
                 if os.path.exists(root_fallback):
                     log.info(f"[Localization] Found fallback in root: {root_fallback}")
-                    with open(root_fallback, "r", encoding="utf-8") as f:
+                    with open(root_fallback, encoding="utf-8") as f:
                         self.translations.clear()
                         self.translations.update(json.load(f))
                 elif lang != "hu":
@@ -57,7 +60,7 @@ class LocalizationService:
 
     def get_plural_category(self, lang: str, count: int | float) -> str:
         """Determines the Unicode CLDR plural category for the given language and count.
-        
+
         Supported categories: 'zero', 'one', 'two', 'few', 'many', 'other'.
         """
         lang_prefix = lang.lower().split("-")[0].split("_")[0]
@@ -83,7 +86,7 @@ class LocalizationService:
 
         return "one" if (is_int and i == 1) else "other"
 
-    def get(self, key: str, default: Optional[str] = None, **kwargs) -> str:
+    def get(self, key: str, default: str | None = None, **kwargs) -> str:
         """Gets a translated string, resolving plural forms, icons, and dynamic kwargs."""
         raw_val = self.translations.get(key, default if default is not None else key)
 
@@ -94,13 +97,18 @@ class LocalizationService:
                 count_val = kwargs["count"]
             else:
                 # Look for common numeric parameter names
-                for k, v in kwargs.items():
+                for _k, v in kwargs.items():
                     if isinstance(v, (int, float)):
                         count_val = v
                         break
 
             category = self.get_plural_category(self.current_lang, count_val if count_val is not None else 1)
-            text = raw_val.get(category) or raw_val.get("other") or raw_val.get("one") or (list(raw_val.values())[0] if raw_val else key)
+            text = (
+                raw_val.get(category)
+                or raw_val.get("other")
+                or raw_val.get("one")
+                or (list(raw_val.values())[0] if raw_val else key)
+            )
         elif not isinstance(raw_val, str):
             text = str(raw_val)
         else:
@@ -110,6 +118,7 @@ class LocalizationService:
         if "{" in text:
             try:
                 from core.icons import Icons
+
                 placeholders = re.findall(r"\{([A-Z0-9_]+)\}", text)
                 for p in placeholders:
                     if hasattr(Icons, p):
@@ -125,7 +134,7 @@ class LocalizationService:
             log.error(f"Error formatting translation key '{key}': {e}")
             return text
 
-    def get_plural(self, key: str, count: int | float, default: Optional[str] = None, **kwargs) -> str:
+    def get_plural(self, key: str, count: int | float, default: str | None = None, **kwargs) -> str:
         """Explicit helper method for pluralized translations."""
         return self.get(key, default=default, count=count, **kwargs)
 
@@ -141,5 +150,6 @@ class LocalizationService:
                         cmd.description = desc_val
         except Exception as e:
             log.error(f"Error during command localization: {e}")
+
 
 __all__ = ["LocalizationService"]

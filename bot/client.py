@@ -1,39 +1,29 @@
-import os
 import asyncio
 import datetime
-import psutil
+import os
+
 import discord
+import psutil
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from core.logger import log, reconfigure_log
-from core.icons import Icons
-from core.utils import get_feedback
-from core.config.config_repository import ConfigRepository
-from core.config.state_repository import StateRepository
-from core.services.i18n_service import LocalizationService
-from core.system.process_spawner import ProcessSpawner
-from core.system.process_tracker import ProcessTracker
-from core.system.metrics_collector import MetricsCollector
-from core.system.git_client import GitClient
-from core.system.log_rotator import LogRotator
-from core.services.bot_lifecycle_service import BotLifecycleService
-from core.services.update_service import UpdateService
-from core.services.health_service import HealthService
-from core.services.telemetry_service import TelemetryService
-
 from core.container import ServiceContainer
+from core.icons import Icons
+from core.logger import log
+from core.utils import get_feedback
+
 
 class BotManager(commands.Bot):
     """Clean BotManager class responsible for Discord lifecycle, presence, and extension loading."""
+
     def __init__(self, base_dir: str = None, container: ServiceContainer = None):
-        self.base_dir = os.path.abspath(base_dir) if base_dir else os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+        self.base_dir = (
+            os.path.abspath(base_dir) if base_dir else os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+        )
 
         # 1. Dependency Injection / Service Container
         self.container = container or ServiceContainer.create_default(
-            base_dir=self.base_dir,
-            notify_callback=self.notify_admin,
-            alert_callback=self._handle_bot_crash
+            base_dir=self.base_dir, notify_callback=self.notify_admin, alert_callback=self._handle_bot_crash
         )
 
         # 2. Extract configuration metadata
@@ -67,16 +57,8 @@ class BotManager(commands.Bot):
         self.last_net_io = psutil.net_io_counters()
         self.last_net_time = datetime.datetime.now()
 
-        # 4. Service References for Backward Compatibility with Cogs and Tests
-        self.spawner = self.container.spawner
-        self.tracker = self.container.tracker
-        self.metrics_collector = self.container.metrics_collector
-        self.git_client = self.container.git_client
-        self.log_rotator = self.container.log_rotator
-        self.lifecycle_service = self.container.lifecycle_service
-        self.update_service = self.container.update_service
-        self.health_service = self.container.health_service
-        self.telemetry_service = self.container.telemetry_service
+        # 4. Service container backing storage (services resolved via properties on demand)
+        self._is_first_ready = True
 
         # 5. Discord Intents & Base Init
         intents = discord.Intents.default()
@@ -84,6 +66,88 @@ class BotManager(commands.Bot):
         intents.message_content = True
 
         super().__init__(command_prefix=self.command_prefix, intents=intents)
+
+    # --- Container Property Delegations (Decoupled & Backward Compatible) ---
+
+    @property
+    def spawner(self):
+        return self.container.spawner
+
+    @spawner.setter
+    def spawner(self, val):
+        self.container.register("spawner", val)
+
+    @property
+    def tracker(self):
+        return self.container.tracker
+
+    @tracker.setter
+    def tracker(self, val):
+        self.container.register("tracker", val)
+
+    @property
+    def metrics_collector(self):
+        return self.container.metrics_collector
+
+    @metrics_collector.setter
+    def metrics_collector(self, val):
+        self.container.register("metrics_collector", val)
+
+    @property
+    def git_client(self):
+        return self.container.git_client
+
+    @git_client.setter
+    def git_client(self, val):
+        self.container.register("git_client", val)
+
+    @property
+    def log_rotator(self):
+        return self.container.log_rotator
+
+    @log_rotator.setter
+    def log_rotator(self, val):
+        self.container.register("log_rotator", val)
+
+    @property
+    def lifecycle_service(self):
+        return self.container.lifecycle_service
+
+    @lifecycle_service.setter
+    def lifecycle_service(self, val):
+        self.container.register("lifecycle_service", val)
+
+    @property
+    def update_service(self):
+        return self.container.update_service
+
+    @update_service.setter
+    def update_service(self, val):
+        self.container.register("update_service", val)
+
+    @property
+    def health_service(self):
+        return self.container.health_service
+
+    @health_service.setter
+    def health_service(self, val):
+        self.container.register("health_service", val)
+
+    @property
+    def telemetry_service(self):
+        return self.container.telemetry_service
+
+    @telemetry_service.setter
+    def telemetry_service(self, val):
+        self.container.register("telemetry_service", val)
+
+    @property
+    def metrics_server(self):
+        return self.container.metrics_server
+
+    @metrics_server.setter
+    def metrics_server(self, val):
+        self.container.register("metrics_server", val)
 
     def save_state(self, key, value):
         """Saves a key-value pair to runtime state."""
@@ -136,12 +200,7 @@ class BotManager(commands.Bot):
     async def update_activity_task(self):
         """Cycles dynamic mechanic-themed activity presences."""
         try:
-            activities = [
-                "activity_maintenance",
-                "activity_resource",
-                "activity_network",
-                "activity_status"
-            ]
+            activities = ["activity_maintenance", "activity_resource", "activity_network", "activity_status"]
             key = activities[self.activity_index % len(activities)]
             self.activity_index += 1
 
@@ -158,12 +217,14 @@ class BotManager(commands.Bot):
                 if dt > 0:
                     down = (io.bytes_recv - self.last_net_io.bytes_recv) / dt
                     up = (io.bytes_sent - self.last_net_io.bytes_sent) / dt
+
                     def format_bytes(b):
-                        for unit in ['B/s', 'KB/s', 'MB/s']:
+                        for unit in ["B/s", "KB/s", "MB/s"]:
                             if b < 1024:
                                 return f"{b:.1f} {unit}"
                             b /= 1024
                         return f"{b:.1f} GB/s"
+
                     kwargs["down"] = format_bytes(down)
                     kwargs["up"] = format_bytes(up)
                 else:
@@ -177,10 +238,7 @@ class BotManager(commands.Bot):
                 activity_text = activity_text[:117] + "..."
 
             await self.change_presence(
-                activity=discord.Activity(
-                    type=discord.ActivityType.watching,
-                    name=activity_text
-                )
+                activity=discord.Activity(type=discord.ActivityType.watching, name=activity_text)
             )
         except Exception as e:
             log.error(f"[Activity] Error updating presence: {e}")
@@ -225,6 +283,12 @@ class BotManager(commands.Bot):
         self.check_processes.change_interval(seconds=self.check_interval)
         self.check_processes.start()
 
+        # 5. Start Prometheus Metrics HTTP Server
+        if self.container.has("metrics_server"):
+            metrics_srv = self.container.metrics_server
+            if metrics_srv and getattr(metrics_srv, "enabled", True):
+                await metrics_srv.start()
+
         # Global slash command error handler
         @self.tree.error
         async def on_app_command_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
@@ -238,13 +302,15 @@ class BotManager(commands.Bot):
 
             log.error(f"[BotManager] Slash command error: {error}")
             if not interaction.response.is_done():
-                await interaction.response.send_message(get_feedback(self.i18n, "error_command_failed", error=str(error)), ephemeral=True)
+                await interaction.response.send_message(
+                    get_feedback(self.i18n, "error_command_failed", error=str(error)), ephemeral=True
+                )
 
     async def cleanup_status_panel(self) -> None:
         """Deletes previous status panel message before manager restart."""
         try:
-            monitor = self.get_cog('MonitoringCog')
-            if monitor and getattr(monitor, 'status_message_id', None) and getattr(monitor, 'status_channel_id', None):
+            monitor = self.get_cog("MonitoringCog")
+            if monitor and getattr(monitor, "status_message_id", None) and getattr(monitor, "status_channel_id", None):
                 channel = self.get_channel(int(monitor.status_channel_id))
                 if not channel:
                     channel = await self.fetch_channel(int(monitor.status_channel_id))
@@ -267,6 +333,7 @@ class BotManager(commands.Bot):
                     bot_id = parts[1]
                     action = parts[2]
                     from bot.ui.components.buttons import handle_status_interaction
+
                     await handle_status_interaction(interaction, bot_id, action)
                     return
 
@@ -274,25 +341,29 @@ class BotManager(commands.Bot):
 
     async def on_ready(self):
         """Runs once when the Discord client is fully ready."""
-        log.info(f"[BotManager] on_ready received. Logged in as: {self.user} (ID: {self.user.id if self.user else 'None'})")
+        log.info(
+            f"[BotManager] on_ready received. Logged in as: {self.user} (ID: {self.user.id if self.user else 'None'})"
+        )
         await Icons.setup_async(self)
         await asyncio.sleep(2)
 
         if not self.update_activity_task.is_running():
             self.update_activity_task.start()
 
-        temp_dir = self.config.get("bot_settings", {}).get("temp_dir", "tmp")
-        restart_info_path = os.path.join(self.base_dir, temp_dir, "manager_restart.json")
-        is_restart = os.path.exists(restart_info_path)
+        if self._is_first_ready:
+            self._is_first_ready = False
+            temp_dir = self.config.get("bot_settings", {}).get("temp_dir", "tmp")
+            restart_info_path = os.path.join(self.base_dir, temp_dir, "manager_restart.json")
+            is_restart = os.path.exists(restart_info_path)
 
-        try:
-            msg = get_feedback(self.i18n, "manager_online_log", name=self.manager_name, pid=os.getpid())
-            await self.notify_admin(msg)
-            if is_restart and os.path.exists(restart_info_path):
-                os.remove(restart_info_path)
-                log.info("[BotManager] Restart marker cleaned up.")
-        except Exception as e:
-            log.error(f"[BotManager] Failed to send startup notification: {e}")
+            try:
+                msg = get_feedback(self.i18n, "manager_online_log", name=self.manager_name, pid=os.getpid())
+                await self.notify_admin(msg)
+                if is_restart and os.path.exists(restart_info_path):
+                    os.remove(restart_info_path)
+                    log.info("[BotManager] Restart marker cleaned up.")
+            except Exception as e:
+                log.error(f"[BotManager] Failed to send startup notification: {e}")
 
     async def on_message(self, message):
         if message.author.bot:
@@ -324,3 +395,14 @@ class BotManager(commands.Bot):
         """Heartbeat check loop for unexpected bot termination."""
         log.info("[BotManager] Heartbeat: Checking processes...")
         await self.health_service.check_health()
+
+    async def close(self):
+        """Cleanly shuts down background servers and Discord gateway connection."""
+        try:
+            if self.container.has("metrics_server"):
+                metrics_srv = self.container.metrics_server
+                if metrics_srv:
+                    await metrics_srv.stop()
+        except Exception as e:
+            log.debug(f"[BotManager] Error stopping metrics server during shutdown: {e}")
+        await super().close()

@@ -1,10 +1,13 @@
 """Shared Pytest fixtures and mock objects for FixItFixa test suite."""
-import os
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock
-from core.config.models import AppConfig, BotConfig, BotSettingsConfig, AccessControlConfig
-from core.system.process_tracker import ProcessTracker
+
+import pytest
+
+from core.config.models import AccessControlConfig, AppConfig, BotConfig, BotSettingsConfig
 from core.services.i18n_service import LocalizationService
+from core.system.process_tracker import ProcessTracker
+
 
 @pytest.fixture
 def sample_config():
@@ -12,33 +15,34 @@ def sample_config():
     bot1 = BotConfig(id="b1", name="Bot 1", path="C:\\shared_cluster", cmd="python b1.py", log="b1.log")
     bot2 = BotConfig(id="b2", name="Bot 2", path="C:\\shared_cluster", cmd="python b2.py", log="b2.log")
     bot3 = BotConfig(id="b3", name="Solo Bot", path="C:\\solo_folder", cmd="python solo.py", log="solo.log")
-    
+
     settings = BotSettingsConfig(
         language="hu",
         git_branch="origin/main",
         status_refresh_seconds=60,
         status_recreate_minutes=58,
         log_default_lines=50,
-        purge_limit=1000
+        purge_limit=1000,
     )
-    
+
     access = AccessControlConfig(
-        roles={"admin": "111222", "tester": "333444"},
-        channels={"admin": "555666", "public": "777888"}
+        roles={"admin": "111222", "tester": "333444"}, channels={"admin": "555666", "public": "777888"}
     )
-    
+
     return AppConfig(
         guild_id="999888",
         access_control=access,
         bot_settings=settings,
-        ui_settings={"accent_color": 0x2b2d31, "view_timeout": 300},
-        bots={"b1": bot1, "b2": bot2, "b3": bot3}
+        ui_settings={"accent_color": 0x2B2D31, "view_timeout": 300},
+        bots={"b1": bot1, "b2": bot2, "b3": bot3},
     )
+
 
 @pytest.fixture
 def mock_i18n():
     """Provides a live LocalizationService instance initialized with Hungarian locale."""
     return LocalizationService("hu")
+
 
 @pytest.fixture
 def mock_spawner():
@@ -59,10 +63,12 @@ def mock_spawner():
     spawner.execute_manager_shutdown = MagicMock()
     return spawner
 
+
 @pytest.fixture
 def mock_tracker():
     """Provides an isolated ProcessTracker instance."""
     return ProcessTracker()
+
 
 @pytest.fixture
 def mock_git_client():
@@ -70,13 +76,20 @@ def mock_git_client():
     git_client = MagicMock()
     git_client.is_git_repo = MagicMock(return_value=True)
     git_client.clean_locks = MagicMock()
-    git_client.get_commit_details = MagicMock(return_value={"hash": "abcdef1", "author": "Dev", "message": "feat", "date": "1700000000"})
+    git_client.get_commit_details = MagicMock(
+        return_value={"hash": "abcdef1", "author": "Dev", "message": "feat", "date": "1700000000"}
+    )
     git_client.get_remote_url = MagicMock(return_value="https://github.com/repo/test")
     git_client.check_is_behind = MagicMock(return_value=False)
-    git_client.update_repo = MagicMock(return_value=(True, "Updated successfully", True, {"hash": "abcdef1", "message": "feat"}))
-    git_client.rollback_repo = MagicMock(return_value=(True, "Rolled back successfully", True, {"hash": "1234567", "message": "revert"}))
+    git_client.update_repo = MagicMock(
+        return_value=(True, "Updated successfully", True, {"hash": "abcdef1", "message": "feat"})
+    )
+    git_client.rollback_repo = MagicMock(
+        return_value=(True, "Rolled back successfully", True, {"hash": "1234567", "message": "revert"})
+    )
     git_client.install_dependencies = MagicMock(return_value=(True, "Dependencies installed."))
     return git_client
+
 
 @pytest.fixture
 def mock_user():
@@ -85,11 +98,12 @@ def mock_user():
     user.id = 999111
     user.name = "TestAdmin"
     user.guild_permissions.administrator = True
-    
+
     admin_role = MagicMock()
     admin_role.id = 111222
     user.roles = [admin_role]
     return user
+
 
 @pytest.fixture
 def mock_channel():
@@ -102,6 +116,7 @@ def mock_channel():
     channel.fetch_message = AsyncMock()
     return channel
 
+
 @pytest.fixture
 def mock_interaction(mock_user, mock_channel, mock_bot):
     """Provides a fully mocked Discord Interaction."""
@@ -112,11 +127,13 @@ def mock_interaction(mock_user, mock_channel, mock_bot):
     interaction.guild_id = 999888
     interaction.client = mock_bot
     interaction.response = MagicMock()
+    interaction.response.is_done = MagicMock(return_value=False)
     interaction.response.send_message = AsyncMock()
     interaction.response.defer = AsyncMock()
     interaction.followup = MagicMock()
     interaction.followup.send = AsyncMock()
     return interaction
+
 
 @pytest.fixture
 def mock_bot(sample_config, mock_i18n, mock_spawner, mock_tracker, mock_git_client):
@@ -137,13 +154,13 @@ def mock_bot(sample_config, mock_i18n, mock_spawner, mock_tracker, mock_git_clie
     bot.spawner = mock_spawner
     bot.tracker = mock_tracker
     bot.git_client = mock_git_client
-    
+
     # State repo mock
     state_repo = MagicMock()
     state_repo.get = MagicMock(side_effect=lambda k, d=None: "999000" if "id" in k else d)
     state_repo.set = MagicMock()
     bot.state_repo = state_repo
-    
+
     # Config repo mock
     config_repo = MagicMock()
     config_repo.app_config = sample_config
@@ -156,9 +173,27 @@ def mock_bot(sample_config, mock_i18n, mock_spawner, mock_tracker, mock_git_clie
     bot.lifecycle_service.stop_bot = AsyncMock(return_value=(True, None))
 
     bot.update_service = MagicMock()
-    bot.update_service.update_manager = AsyncMock(return_value=(True, "Manager updated", True, {"hash": "abcdef1", "message": "update"}))
-    bot.update_service.update_bot = AsyncMock(return_value=(True, "Bot updated", True, {"hash": "abcdef1", "message": "update"}, [(sample_config.bots["b1"], 12345, None)]))
-    bot.update_service.rollback_bot = AsyncMock(return_value=(True, "Bot rolled back", True, {"hash": "1234567", "message": "rollback"}, [(sample_config.bots["b1"], 12345, None)]))
+    bot.update_service.update_manager = AsyncMock(
+        return_value=(True, "Manager updated", True, {"hash": "abcdef1", "message": "update"})
+    )
+    bot.update_service.update_bot = AsyncMock(
+        return_value=(
+            True,
+            "Bot updated",
+            True,
+            {"hash": "abcdef1", "message": "update"},
+            [(sample_config.bots["b1"], 12345, None)],
+        )
+    )
+    bot.update_service.rollback_bot = AsyncMock(
+        return_value=(
+            True,
+            "Bot rolled back",
+            True,
+            {"hash": "1234567", "message": "rollback"},
+            [(sample_config.bots["b1"], 12345, None)],
+        )
+    )
     bot.update_service.prepare_manager_restart = MagicMock(return_value="tmp/restart.json")
 
     bot.health_service = MagicMock()
@@ -175,7 +210,7 @@ def mock_bot(sample_config, mock_i18n, mock_spawner, mock_tracker, mock_git_clie
         "sys_disk_free": 100,
         "swap": 0,
         "host_uptime": "5d",
-        "net": "↓0B ↑0B"
+        "net": "↓0B ↑0B",
     }
     bot.telemetry_service.get_status_snapshot = MagicMock(return_value=(manager_stats, {}))
 

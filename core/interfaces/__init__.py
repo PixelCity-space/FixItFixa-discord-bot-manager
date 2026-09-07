@@ -1,20 +1,20 @@
-from core.interfaces.system import (
-    ILogRotator,
-    IProcessSpawner,
-    IProcessTracker,
-    IGitClient,
-    IMetricsCollector,
-)
 from core.interfaces.config import (
     IConfigRepository,
     IStateRepository,
 )
 from core.interfaces.services import (
-    ILocalizationService,
     IBotLifecycleService,
-    IUpdateService,
     IHealthService,
+    ILocalizationService,
     ITelemetryService,
+    IUpdateService,
+)
+from core.interfaces.system import (
+    IGitClient,
+    ILogRotator,
+    IMetricsCollector,
+    IProcessSpawner,
+    IProcessTracker,
 )
 
 __all__ = [

@@ -1,32 +1,33 @@
-import pytest
 import datetime
+
+from core.config.config_repository import ConfigRepository
+from core.config.models import AppConfig, BotConfig
+from core.config.state_repository import StateRepository
 from core.interfaces import (
+    IBotLifecycleService,
+    IConfigRepository,
+    IGitClient,
+    IHealthService,
+    ILocalizationService,
     ILogRotator,
+    IMetricsCollector,
     IProcessSpawner,
     IProcessTracker,
-    IGitClient,
-    IMetricsCollector,
-    IConfigRepository,
     IStateRepository,
-    ILocalizationService,
-    IBotLifecycleService,
-    IUpdateService,
-    IHealthService,
     ITelemetryService,
+    IUpdateService,
 )
+from core.services.bot_lifecycle_service import BotLifecycleService
+from core.services.health_service import HealthService
+from core.services.i18n_service import LocalizationService
+from core.services.telemetry_service import TelemetryService
+from core.services.update_service import UpdateService
+from core.system.git_client import GitClient
 from core.system.log_rotator import LogRotator
+from core.system.metrics_collector import MetricsCollector
 from core.system.process_spawner import ProcessSpawner
 from core.system.process_tracker import ProcessTracker
-from core.system.git_client import GitClient
-from core.system.metrics_collector import MetricsCollector
-from core.config.config_repository import ConfigRepository
-from core.config.state_repository import StateRepository
-from core.config.models import AppConfig, BotConfig
-from core.services.i18n_service import LocalizationService
-from core.services.bot_lifecycle_service import BotLifecycleService
-from core.services.update_service import UpdateService
-from core.services.health_service import HealthService
-from core.services.telemetry_service import TelemetryService
+
 
 def test_system_implementations_satisfy_protocols(tmp_path):
     """Verifies that all concrete system classes satisfy their respective Protocol interfaces."""
@@ -45,6 +46,7 @@ def test_system_implementations_satisfy_protocols(tmp_path):
     metrics_collector = MetricsCollector()
     assert isinstance(metrics_collector, IMetricsCollector)
 
+
 def test_config_implementations_satisfy_protocols(tmp_path):
     """Verifies that ConfigRepository and StateRepository satisfy repository protocols."""
     config_file = tmp_path / "config.json"
@@ -55,6 +57,7 @@ def test_config_implementations_satisfy_protocols(tmp_path):
     state_file = tmp_path / "state.json"
     state_repo = StateRepository(str(state_file))
     assert isinstance(state_repo, IStateRepository)
+
 
 def test_services_implementations_satisfy_protocols():
     """Verifies that all domain service classes satisfy service protocols."""
@@ -80,12 +83,14 @@ def test_services_implementations_satisfy_protocols():
         tracker=tracker,
         metrics_collector=MetricsCollector(),
         i18n=i18n,
-        start_time=datetime.datetime.now()
+        start_time=datetime.datetime.now(),
     )
     assert isinstance(telemetry_service, ITelemetryService)
 
+
 def test_custom_mock_satisfies_protocol_and_can_be_injected():
     """Verifies that a custom mock implementing IProcessSpawner can be injected into BotLifecycleService."""
+
     class CustomMockSpawner:
         stop_timeout = 1.0
         restart_wait = 0.5

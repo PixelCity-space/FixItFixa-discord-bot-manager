@@ -1,13 +1,17 @@
-import discord
-from unittest.mock import MagicMock
-from core.common.enums import AccessLevel
-from bot.checks import get_user_level, is_admin_context, is_monitor_context
 import asyncio
+from unittest.mock import MagicMock
+
+import discord
+
+from bot.checks import get_user_level, is_admin_context, is_monitor_context
+from core.common.enums import AccessLevel
+
 
 def test_access_level_hierarchy():
     assert AccessLevel.BOSS > AccessLevel.MECHANIC
     assert AccessLevel.MECHANIC > AccessLevel.INSPECTOR
     assert AccessLevel.INSPECTOR > AccessLevel.USER
+
 
 def test_get_user_level_guild_owner():
     user = MagicMock(spec=discord.Member)
@@ -18,6 +22,7 @@ def test_get_user_level_guild_owner():
 
     level = get_user_level(user, bot)
     assert level == AccessLevel.BOSS
+
 
 def test_get_user_level_administrator_permission():
     user = MagicMock(spec=discord.Member)
@@ -30,6 +35,7 @@ def test_get_user_level_administrator_permission():
 
     level = get_user_level(user, bot)
     assert level == AccessLevel.BOSS
+
 
 def test_get_user_level_admin_role():
     user = MagicMock(spec=discord.Member)
@@ -49,6 +55,7 @@ def test_get_user_level_admin_role():
     level = get_user_level(user, bot)
     assert level == AccessLevel.MECHANIC
 
+
 def test_get_user_level_tester_role():
     user = MagicMock(spec=discord.Member)
     user.guild = MagicMock()
@@ -67,6 +74,7 @@ def test_get_user_level_tester_role():
     level = get_user_level(user, bot)
     assert level == AccessLevel.INSPECTOR
 
+
 def test_get_user_level_user():
     user = MagicMock(spec=discord.Member)
     user.guild = MagicMock()
@@ -81,6 +89,7 @@ def test_get_user_level_user():
 
     level = get_user_level(user, bot)
     assert level == AccessLevel.USER
+
 
 def test_is_admin_context_check():
     async def run():
@@ -99,6 +108,7 @@ def test_is_admin_context_check():
         assert allowed is True
 
     asyncio.run(run())
+
 
 def test_is_monitor_context_check():
     async def run():
@@ -123,5 +133,56 @@ def test_is_monitor_context_check():
 
         allowed = await predicate(interaction)
         assert allowed is True
+
+    asyncio.run(run())
+
+
+def test_get_user_level_bot_owner():
+    user = MagicMock(spec=discord.User)
+    user.id = 999111
+    bot = MagicMock()
+    bot.owner_id = 999111
+
+    level = get_user_level(user, bot)
+    assert level == AccessLevel.BOSS
+
+
+def test_get_user_level_bot_owner_ids():
+    user = MagicMock(spec=discord.User)
+    user.id = 888222
+    bot = MagicMock()
+    bot.owner_id = None
+    bot.owner_ids = {888222, 777333}
+
+    level = get_user_level(user, bot)
+    assert level == AccessLevel.BOSS
+
+
+def test_get_user_level_dm_regular_user():
+    user = MagicMock(spec=discord.User)
+    user.id = 123456
+    bot = MagicMock()
+    bot.owner_id = 999111
+    bot.owner_ids = set()
+
+    level = get_user_level(user, bot)
+    assert level == AccessLevel.USER
+
+
+def test_is_bot_owner_helper():
+    async def run():
+        from bot.checks import is_bot_owner
+
+        bot = MagicMock()
+        bot.owner_id = 123
+        bot.owner_ids = set()
+
+        owner_user = MagicMock()
+        owner_user.id = 123
+        other_user = MagicMock()
+        other_user.id = 456
+
+        assert await is_bot_owner(owner_user, bot) is True
+        assert await is_bot_owner(other_user, bot) is False
 
     asyncio.run(run())

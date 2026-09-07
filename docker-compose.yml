@@ -7,12 +7,21 @@ services:
       dockerfile: Dockerfile
     container_name: fixitfixa-manager
     restart: unless-stopped
+    ports:
+      - "9090:9090"
     env_file:
       - .env
+    environment:
+      - BOTS_DIR=/bots
     volumes:
       - ./config.json:/app/config.json
       - ./state.json:/app/state.json
       - ./manager.log:/app/manager.log
+      # Child bot repositories & environments directory
+      - ${BOTS_DIR:-./bots}:/bots
+      # Optional: uncomment to allow systemd management from container on Linux hosts:
+      # - /run/systemd/system:/run/systemd/system:ro
+      # - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
     logging:
       driver: "json-file"
       options:

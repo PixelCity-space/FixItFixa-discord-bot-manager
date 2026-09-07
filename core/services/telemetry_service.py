@@ -1,28 +1,38 @@
-import os
-import psutil
 import datetime
-from typing import Dict, Any, Tuple, Optional, List
+import os
+from typing import Any
+
+import psutil
+
 from core.config.models import AppConfig
-from core.interfaces.system import IProcessTracker, IMetricsCollector
 from core.interfaces.services import ILocalizationService
-from core.utils import get_feedback
+from core.interfaces.system import IMetricsCollector, IProcessTracker
 from core.logger import log
+from core.utils import get_feedback
+
 
 class TelemetryService:
     """Aggregates system, process, log file, and database telemetry into structured status payloads."""
+
     def __init__(
         self,
         config: AppConfig,
         tracker: IProcessTracker,
         metrics_collector: IMetricsCollector,
         i18n: ILocalizationService,
-        start_time: Optional[datetime.datetime] = None,
+        start_time: datetime.datetime | None = None,
     ):
         self.config = config
         self.tracker = tracker
         self.metrics_collector = metrics_collector
         self.i18n = i18n
         self.start_time = start_time or datetime.datetime.now()
+        try:
+            self._process = psutil.Process()
+            self._process.cpu_percent(interval=None)
+        except Exception as e:
+            log.debug(f"[TelemetryService] Failed to initialize psutil.Process: {e}")
+            self._process = None
 
     def format_uptime(self, uptime_sec: float) -> str:
         """Formats uptime in seconds into localized human-readable string."""
@@ -33,7 +43,7 @@ class TelemetryService:
             return get_feedback(self.i18n, "uptime_hours", h=int(sec / 3600))
         return get_feedback(self.i18n, "uptime_minutes", m=int(sec / 60))
 
-    def get_log_size(self, bot_path: Optional[str], log_filename: Optional[str]) -> str:
+    def get_log_size(self, bot_path: str | None, log_filename: str | None) -> str:
         """Calculates human-readable log size in MB or KB."""
         if not bot_path or not log_filename:
             return "N/A"
@@ -51,9 +61,9 @@ class TelemetryService:
             log.debug(f"[TelemetryService] Unexpected error reading log size for {bot_path}/{log_filename}: {e}")
         return "N/A"
 
-    def get_db_sizes(self, bot_path: Optional[str], db_filenames: Optional[List[str]]) -> Dict[str, str]:
+    def get_db_sizes(self, bot_path: str | None, db_filenames: list[str] | None) -> dict[str, str]:
         """Calculates file sizes of all monitored SQLite database files."""
-        db_sizes = {}
+        db_sizes: dict[str, str] = {}
         if not bot_path or not db_filenames:
             return db_sizes
 
@@ -74,20 +84,32 @@ class TelemetryService:
                 log.debug(f"[TelemetryService] Unexpected error reading db size for {bot_path}/{db_file}: {e}")
         return db_sizes
 
-    def collect_manager_metrics(self, git_behind_status: Optional[Dict[str, bool]] = None) -> Dict[str, Any]:
+    def collect_manager_metrics(self, git_behind_status: dict[str, bool] | None = None) -> dict[str, Any]:
         """Gathers Manager process and host system statistics."""
         self_cpu = 0.0
         self_ram_mb = 0.0
 
-        try:
-            current_proc = psutil.Process()
-            with current_proc.oneshot():
-                self_cpu = current_proc.cpu_percent()
-                self_ram_mb = current_proc.memory_info().rss / (1024 * 1024)
-        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-            log.debug(f"[TelemetryService] Could not sample manager process metrics: {e}")
-        except Exception as e:
-            log.debug(f"[TelemetryService] Unexpected error sampling manager metrics: {e}")
+        if self._process is None:
+            try:
+                self._process = psutil.Process()
+                self._process.cpu_percent(interval=None)
+            except Exception as e:
+                log.debug(f"[TelemetryService] Could not initialize psutil.Process: {e}")
+
+        if self._process is not None:
+            try:
+                with self._process.oneshot():
+                    self_cpu = self._process.cpu_percent(interval=None)
+                    self_ram_mb = self._process.memory_info().rss / (1024 * 1024)
+            except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+                log.debug(f"[TelemetryService] Could not sample manager process metrics: {e}")
+                try:
+                    self._process = psutil.Process()
+                    self._process.cpu_percent(interval=None)
+                except Exception:
+                    self._process = None
+            except Exception as e:
+                log.debug(f"[TelemetryService] Unexpected error sampling manager metrics: {e}")
 
         uptime_sec = max(0.0, (datetime.datetime.now() - self.start_time).total_seconds())
         uptime_str = self.format_uptime(uptime_sec)
@@ -96,7 +118,9 @@ class TelemetryService:
         host_uptime_sec = sys_metrics.get("host_uptime_sec", 0)
         host_uptime_str = self.format_uptime(host_uptime_sec)
 
-        default_branch = self.config.bot_settings.git_branch if self.config and self.config.bot_settings else "origin/main"
+        default_branch = (
+            self.config.bot_settings.git_branch if self.config and self.config.bot_settings else "origin/main"
+        )
 
         behind_map = git_behind_status or {}
         has_update = behind_map.get("manager", False)
@@ -116,9 +140,9 @@ class TelemetryService:
             "has_update": has_update,
         }
 
-    def collect_bots_metrics(self, git_behind_status: Optional[Dict[str, bool]] = None) -> Dict[str, Any]:
+    def collect_bots_metrics(self, git_behind_status: dict[str, bool] | None = None) -> dict[str, Any]:
         """Gathers telemetry for all configured child bots."""
-        bots_stats = {}
+        bots_stats: dict[str, Any] = {}
         behind_map = git_behind_status or {}
 
         for bot_id, bot in self.config.bots.items():
@@ -139,13 +163,15 @@ class TelemetryService:
                 bot_entry["is_running"] = True
                 b_uptime_str = self.format_uptime(stats["uptime_sec"])
                 status_text = get_feedback(self.i18n, "status_running")
-                bot_entry.update({
-                    "status": status_text,
-                    "uptime": b_uptime_str,
-                    "pid": stats["pid"],
-                    "cpu": stats["cpu"],
-                    "ram": stats["ram_mb"],
-                })
+                bot_entry.update(
+                    {
+                        "status": status_text,
+                        "uptime": b_uptime_str,
+                        "pid": stats["pid"],
+                        "cpu": stats["cpu"],
+                        "ram": stats["ram_mb"],
+                    }
+                )
             else:
                 bot_entry["status"] = get_feedback(self.i18n, "status_stopped")
 
@@ -153,10 +179,21 @@ class TelemetryService:
 
         return bots_stats
 
-    def get_status_snapshot(self, git_behind_status: Optional[Dict[str, bool]] = None) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    def get_status_snapshot(
+        self, git_behind_status: dict[str, bool] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Returns complete (manager_stats, bots_stats) tuple ready for UI presentation."""
         manager_stats = self.collect_manager_metrics(git_behind_status)
         bots_stats = self.collect_bots_metrics(git_behind_status)
         return manager_stats, bots_stats
+
+    async def get_status_snapshot_async(
+        self, git_behind_status: dict[str, bool] | None = None
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Asynchronously gathers status snapshot in a worker thread to avoid blocking the event loop."""
+        import asyncio
+
+        return await asyncio.to_thread(self.get_status_snapshot, git_behind_status)
+
 
 __all__ = ["TelemetryService"]

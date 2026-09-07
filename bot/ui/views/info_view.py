@@ -1,21 +1,27 @@
-from discord.ui import LayoutView, Container, TextDisplay, Separator, Section, Thumbnail
-from core.utils import get_feedback, format_desc
+from discord.ui import Container, LayoutView, Section, Separator, TextDisplay, Thumbnail
+
+from core.utils import format_desc, get_feedback
+
 
 class ModernInfoView(LayoutView):
     """A premium, modern intro view for FixItFixa using Components V2 layout."""
+
     def __init__(self, bot, i18n, guild=None):
-        ui = getattr(bot, 'ui_settings', {})
-        accent = ui.get("accent_color", 0x2b2d31)
+        ui = getattr(bot, "ui_settings", {})
+        accent = ui.get("accent_color", 0x2B2D31)
         super().__init__(timeout=None)
 
         container = Container(accent_color=accent)
 
         # Header with bot name and avatar
-        avatar_url = bot.user.display_avatar.url if (bot.user and hasattr(bot.user, 'display_avatar')) else "https://cdn.discordapp.com/embed/avatars/0.png"
-        container.add_item(Section(
-            f"# {get_feedback(i18n, 'INFO_TITLE', bot_name=bot.manager_name)}",
-            accessory=Thumbnail(avatar_url)
-        ))
+        avatar_url = (
+            bot.user.display_avatar.url
+            if (bot.user and hasattr(bot.user, "display_avatar"))
+            else "https://cdn.discordapp.com/embed/avatars/0.png"
+        )
+        container.add_item(
+            Section(f"# {get_feedback(i18n, 'INFO_TITLE', bot_name=bot.manager_name)}", accessory=Thumbnail(avatar_url))
+        )
 
         container.add_item(Separator())
 
@@ -26,7 +32,7 @@ class ModernInfoView(LayoutView):
         container.add_item(Separator())
 
         # Features
-        raw_features_title = get_feedback(i18n, 'INFO_FEATURES_TITLE')
+        raw_features_title = get_feedback(i18n, "INFO_FEATURES_TITLE")
         raw_features_desc = i18n.translations.get("INFO_FEATURES_DESC", "INFO_FEATURES_DESC")
         features_combined = f"**{raw_features_title}**\n{raw_features_desc}"
         container.add_item(TextDisplay(format_desc(bot, features_combined, guild)))

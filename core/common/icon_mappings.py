@@ -1,5 +1,7 @@
 """Centralized mappings between localization keys and visual emoji icons."""
-from typing import Optional, Any
+
+from typing import Any
+
 from core.icons import Icons
 
 # Mapping keys to Icons attribute names (or direct string icon)
@@ -19,7 +21,6 @@ ICON_KEY_MAP = {
     "status_failed": "ERROR",
     "status_error_prefix": "ERROR",
     "status_error": "ERROR",
-
     # --- Warnings (⚠️) : Non-blocking / User input errors ---
     "warning_generic": "WARNING",
     "update_available": "WARNING",
@@ -31,11 +32,9 @@ ICON_KEY_MAP = {
     "error_unknown_bot": "WARNING",
     "update_no_changes": "WARNING",
     "status_refreshed": "WARNING",
-
     # --- Alerts (🚨) : Urgent state changes ---
     "bot_stopped_alert": "ALERT",
     "status_uncertain": "ALERT",
-
     # --- Success (🚀/✅) : Positive feedback ---
     "success_generic": "SUCCESS",
     "update_success": "ROCKET",
@@ -49,7 +48,6 @@ ICON_KEY_MAP = {
     "manager_update_success": "SUCCESS",
     "logs_rotate_success": "SUCCESS",
     "logs_rotate_no_need": "WARNING",
-
     # --- Headers & UI Labels ---
     "manager_status_header": "",
     "bots_status_header": "",
@@ -67,7 +65,6 @@ ICON_KEY_MAP = {
     "bot_updated_title": "SUCCESS",
     "bot_rollback_title": "ROLLBACK",
     "update_footer": "SUCCESS",
-
     # --- Administrative (🛡️) : Permissions / Protection ---
     "error_admin_only": "SHIELD_LIGHT",
     "error_admin_context": "SHIELD_LIGHT",
@@ -79,7 +76,6 @@ ICON_KEY_MAP = {
     "ping_pong": "",
     "manager_online_log": "SHIELD_LIGHT",
     "activity_status": "SHIELD",
-
     # --- Functional Icons (Buttons / System) ---
     "RESTART": "RESTART",
     "UPDATE": "UPDATE",
@@ -100,7 +96,6 @@ ICON_KEY_MAP = {
     "DOT_YELLOW": "DOT_YELLOW",
     "CARET_LEFT": "CARET_LEFT",
     "CARET_RIGHT": "CARET_RIGHT",
-
     # --- Bot & Manager States ---
     "manager_restart_msg": "SHIELD_LIGHT",
     "manager_updating": "UPDATE",
@@ -118,7 +113,8 @@ ICON_KEY_MAP = {
     "activity_network": "WAVE",
 }
 
-def resolve_icon_for_key(key: str) -> Optional[Any]:
+
+def resolve_icon_for_key(key: str) -> Any | None:
     """Resolves an icon partial emoji or string corresponding to a feedback key."""
     icon_attr = ICON_KEY_MAP.get(key)
     if icon_attr is None:
@@ -140,6 +136,7 @@ def resolve_icon_for_key(key: str) -> Optional[Any]:
         return Icons.WARNING
 
     return ""
+
 
 __all__ = [
     "ICON_KEY_MAP",

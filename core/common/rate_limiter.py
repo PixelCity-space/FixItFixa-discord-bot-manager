@@ -1,15 +1,16 @@
-import time
 import threading
-from typing import Dict, Tuple, Optional
+import time
+
 
 class InteractionRateLimiter:
     """Thread-safe rate limiter for UI interactions and Discord commands."""
+
     def __init__(self, default_cooldown: float = 2.5):
         self.default_cooldown = default_cooldown
         self._lock = threading.Lock()
-        self._last_interaction: Dict[Tuple[int, str], float] = {}
+        self._last_interaction: dict[tuple[int, str], float] = {}
 
-    def is_limited(self, user_id: int, action: str, cooldown: Optional[float] = None) -> Tuple[bool, float]:
+    def is_limited(self, user_id: int, action: str, cooldown: float | None = None) -> tuple[bool, float]:
         """Checks whether the given user is rate limited for the action.
         Returns:
             (is_limited: bool, remaining_seconds: float)
@@ -34,17 +35,19 @@ class InteractionRateLimiter:
             self._last_interaction[key] = now
             return False, 0.0
 
-    def reset(self, user_id: Optional[int] = None, action: Optional[str] = None) -> None:
+    def reset(self, user_id: int | None = None, action: str | None = None) -> None:
         """Resets rate limiting state."""
         with self._lock:
             if user_id is None and action is None:
                 self._last_interaction.clear()
             else:
                 to_delete = [
-                    k for k in self._last_interaction.keys()
+                    k
+                    for k in self._last_interaction
                     if (user_id is None or k[0] == user_id) and (action is None or k[1] == action)
                 ]
                 for k in to_delete:
                     del self._last_interaction[k]
+
 
 __all__ = ["InteractionRateLimiter"]

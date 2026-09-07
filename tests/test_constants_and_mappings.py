@@ -1,22 +1,21 @@
-import pytest
 from core.common.constants import (
-    DISCORD_MAX_MESSAGE_LENGTH,
-    DISCORD_TRUNCATE_LIMIT,
-    DISCORD_TRUNCATE_OUTPUT_LIMIT,
     truncate_message,
 )
-from core.common.icon_mappings import ICON_KEY_MAP, resolve_icon_for_key
+from core.common.icon_mappings import resolve_icon_for_key
 from core.icons import Icons
 from core.services.i18n_service import LocalizationService
 from core.utils import get_feedback
+
 
 def test_truncate_message_short_text():
     short = "Hello, world!"
     assert truncate_message(short) == short
 
+
 def test_truncate_message_empty():
     assert truncate_message("") == ""
     assert truncate_message(None) is None
+
 
 def test_truncate_message_long_text():
     long_text = "A" * 3000
@@ -26,10 +25,12 @@ def test_truncate_message_long_text():
     assert res.startswith("A" * 1000)
     assert res.endswith("A" * 800)
 
+
 def test_truncate_message_custom_separator():
     long_text = "B" * 2000
     res = truncate_message(long_text, max_len=500, head_len=100, tail_len=100, separator=" [CUT] ")
     assert res == ("B" * 100) + " [CUT] " + ("B" * 100)
+
 
 def test_icon_mappings_resolutions():
     # Direct mapping
@@ -61,6 +62,7 @@ def test_icon_mappings_resolutions():
     # Unmapped empty
     unmapped = resolve_icon_for_key("non_existent_key_xyz")
     assert unmapped == ""
+
 
 def test_get_feedback_with_refactored_mapping():
     i18n = LocalizationService("hu")

@@ -1,16 +1,19 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
+
+from bot.cogs.management_cog import ManagementCog
 from core.config.models import AppConfig, BotConfig
-from core.system.process_spawner import ProcessSpawner
-from core.system.process_tracker import ProcessTracker
 from core.services.bot_lifecycle_service import BotLifecycleService
 from core.services.i18n_service import LocalizationService
-from bot.cogs.management_cog import ManagementCog
+from core.system.process_spawner import ProcessSpawner
+from core.system.process_tracker import ProcessTracker
+
 
 async def invoke_slash_command(command, *args, **kwargs):
     """Safely invokes an app_commands.Command callback for testing."""
     callback_fn = getattr(command, "callback", command)
     return await callback_fn(*args, **kwargs)
+
 
 def test_e2e_management_update_command_flow():
     async def run():
@@ -18,7 +21,15 @@ def test_e2e_management_update_command_flow():
         app_cfg = AppConfig(bots={"b_upd": bot_cfg})
 
         update_mock = MagicMock()
-        update_mock.update_bot = AsyncMock(return_value=(True, "Successfully updated", True, {"hash": "12345", "message": "feat: new", "date": 1700000000}, [(bot_cfg, 9911, None)]))
+        update_mock.update_bot = AsyncMock(
+            return_value=(
+                True,
+                "Successfully updated",
+                True,
+                {"hash": "12345", "message": "feat: new", "date": 1700000000},
+                [(bot_cfg, 9911, None)],
+            )
+        )
 
         bot_mock = MagicMock()
         bot_mock.app_cfg = app_cfg
@@ -38,6 +49,7 @@ def test_e2e_management_update_command_flow():
         interaction.followup.send.assert_awaited_once()
 
     asyncio.run(run())
+
 
 def test_e2e_management_restart_command_flow():
     async def run():
@@ -68,13 +80,22 @@ def test_e2e_management_restart_command_flow():
 
     asyncio.run(run())
 
+
 def test_e2e_management_rollback_command_flow():
     async def run():
         bot_cfg = BotConfig(id="b_rb", name="Rollback Bot", path="C:\\test", cmd="python main.py")
         app_cfg = AppConfig(bots={"b_rb": bot_cfg})
 
         update_mock = MagicMock()
-        update_mock.rollback_bot = AsyncMock(return_value=(True, "Rolled back", True, {"hash": "prev99", "message": "revert", "date": 1700000000}, [(bot_cfg, 5555, None)]))
+        update_mock.rollback_bot = AsyncMock(
+            return_value=(
+                True,
+                "Rolled back",
+                True,
+                {"hash": "prev99", "message": "revert", "date": 1700000000},
+                [(bot_cfg, 5555, None)],
+            )
+        )
 
         bot_mock = MagicMock()
         bot_mock.app_cfg = app_cfg
@@ -94,10 +115,13 @@ def test_e2e_management_rollback_command_flow():
 
     asyncio.run(run())
 
+
 def test_e2e_management_logs_missing_file_fallback(tmp_path):
     async def run():
         missing_log = tmp_path / "missing_bot.log"
-        bot_cfg = BotConfig(id="b_nolog", name="NoLog Bot", path=str(tmp_path), cmd="python main.py", log=str(missing_log))
+        bot_cfg = BotConfig(
+            id="b_nolog", name="NoLog Bot", path=str(tmp_path), cmd="python main.py", log=str(missing_log)
+        )
         app_cfg = AppConfig(bots={"b_nolog": bot_cfg})
 
         bot_mock = MagicMock()

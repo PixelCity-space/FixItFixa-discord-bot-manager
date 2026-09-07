@@ -1,9 +1,11 @@
 from unittest.mock import AsyncMock, MagicMock
+
 from core.config.models import AppConfig, BotConfig
-from core.system.process_spawner import ProcessSpawner
-from core.system.process_tracker import ProcessTracker
 from core.services.bot_lifecycle_service import BotLifecycleService
 from core.services.health_service import HealthService
+from core.system.process_spawner import ProcessSpawner
+from core.system.process_tracker import ProcessTracker
+
 
 async def test_e2e_health_check_crash_and_alert_pipeline():
     bot = BotConfig(id="b_crash", name="Crash Bot", path="C:\\bots\\b_crash", cmd="python app.py")
@@ -34,6 +36,7 @@ async def test_e2e_health_check_crash_and_alert_pipeline():
     assert stopped[0][0] == "b_crash"
     alert_cb.assert_awaited_once_with("b_crash", bot)
 
+
 async def test_e2e_health_check_manual_stop_suppresses_alert():
     bot = BotConfig(id="b_manual", name="Manual Bot", path="C:\\bots\\b_manual", cmd="python app.py")
     app_cfg = AppConfig(bots={"b_manual": bot})
@@ -59,6 +62,7 @@ async def test_e2e_health_check_manual_stop_suppresses_alert():
     assert len(stopped) == 0
     alert_cb.assert_not_called()
 
+
 async def test_e2e_health_check_auto_recovery_clears_alert():
     bot = BotConfig(id="b_recover", name="Recover Bot", path="C:\\bots\\b_recover", cmd="python app.py")
     app_cfg = AppConfig(bots={"b_recover": bot})
@@ -83,6 +87,7 @@ async def test_e2e_health_check_auto_recovery_clears_alert():
 
     await health_service.check_health()
     assert "b_recover" not in health_service.alerted_bots
+
 
 async def test_e2e_health_check_multi_bot_cluster_isolation():
     b1 = BotConfig(id="worker_1", name="Worker 1", path="C:\\cluster", cmd="python w1.py")

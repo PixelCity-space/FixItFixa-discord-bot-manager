@@ -1,7 +1,10 @@
-import discord
 from unittest.mock import AsyncMock, MagicMock
-from core.services.i18n_service import LocalizationService
+
+import discord
+
 from bot.ui.components.buttons import handle_status_interaction
+from core.services.i18n_service import LocalizationService
+
 
 async def test_e2e_rbac_unprivileged_user_blocked():
     interaction = MagicMock()
@@ -22,6 +25,7 @@ async def test_e2e_rbac_unprivileged_user_blocked():
     interaction.response.send_message.assert_awaited_once()
     sent_msg = interaction.response.send_message.call_args[0][0]
     assert "jogosult" in sent_msg or "admin" in sent_msg.lower() or "parancs" in sent_msg
+
 
 async def test_e2e_rbac_inspector_can_restart_but_not_stop():
     role_tester = MagicMock()
@@ -58,6 +62,7 @@ async def test_e2e_rbac_inspector_can_restart_but_not_stop():
     await handle_status_interaction(interaction, "bot1", "stop")
     interaction.response.send_message.assert_awaited_once()
 
+
 async def test_e2e_rbac_mechanic_can_restart_and_stop():
     role_admin = MagicMock()
     role_admin.id = 555
@@ -87,6 +92,7 @@ async def test_e2e_rbac_mechanic_can_restart_and_stop():
     await handle_status_interaction(interaction, "bot1", "stop")
     interaction.response.defer.assert_awaited_once()
     interaction.client.lifecycle_service.stop_bot.assert_awaited_once_with("bot1")
+
 
 async def test_e2e_rbac_guild_owner_boss_bypass_channel_restriction():
     interaction = MagicMock()

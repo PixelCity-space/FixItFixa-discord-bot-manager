@@ -1,13 +1,15 @@
-import datetime
 import asyncio
+import datetime
 from unittest.mock import MagicMock
+
+from bot.cogs.monitoring_cog import MonitoringCog
+from bot.ui.views.status_view import ModernStatusView
 from core.config.models import AppConfig, BotConfig
-from core.system.process_tracker import ProcessTracker
-from core.system.metrics_collector import MetricsCollector
 from core.services.i18n_service import LocalizationService
 from core.services.telemetry_service import TelemetryService
-from bot.ui.views.status_view import ModernStatusView
-from bot.cogs.monitoring_cog import MonitoringCog
+from core.system.metrics_collector import MetricsCollector
+from core.system.process_tracker import ProcessTracker
+
 
 def test_e2e_telemetry_to_status_view_rendering(tmp_path):
     # Setup test bot with temporary log file
@@ -26,7 +28,7 @@ def test_e2e_telemetry_to_status_view_rendering(tmp_path):
         tracker=tracker,
         metrics_collector=metrics_collector,
         i18n=i18n,
-        start_time=datetime.datetime.now()
+        start_time=datetime.datetime.now(),
     )
 
     # 1. Telemetry snapshot generation
@@ -46,6 +48,7 @@ def test_e2e_telemetry_to_status_view_rendering(tmp_path):
     assert view is not None
     assert len(view.children) >= 1
 
+
 def test_e2e_telemetry_cluster_view_rendering(tmp_path):
     cluster_dir = tmp_path / "cluster"
     cluster_dir.mkdir()
@@ -59,7 +62,7 @@ def test_e2e_telemetry_cluster_view_rendering(tmp_path):
         tracker=ProcessTracker(),
         metrics_collector=MetricsCollector(),
         i18n=LocalizationService("hu"),
-        start_time=datetime.datetime.now()
+        start_time=datetime.datetime.now(),
     )
 
     mgr_stats, bots_stats = telemetry_service.get_status_snapshot()
@@ -73,6 +76,7 @@ def test_e2e_telemetry_cluster_view_rendering(tmp_path):
     view = ModernStatusView(bot_mgr, LocalizationService("hu"), mgr_stats, bots_stats, current_page=0)
     assert view is not None
 
+
 def test_e2e_telemetry_sqlite_db_sizes_reporting(tmp_path):
     db_file1 = tmp_path / "data.db"
     db_file1.write_bytes(b"SQLite format 3\x00" + b"\x00" * 4096)
@@ -85,13 +89,14 @@ def test_e2e_telemetry_sqlite_db_sizes_reporting(tmp_path):
         tracker=ProcessTracker(),
         metrics_collector=MetricsCollector(),
         i18n=LocalizationService("hu"),
-        start_time=datetime.datetime.now()
+        start_time=datetime.datetime.now(),
     )
 
     mgr_stats, bots_stats = telemetry_service.get_status_snapshot()
     assert "db_bot" in bots_stats
     assert "data.db" in bots_stats["db_bot"]["db_sizes"]
     assert "KB" in bots_stats["db_bot"]["db_sizes"]["data.db"] or "B" in bots_stats["db_bot"]["db_sizes"]["data.db"]
+
 
 def test_e2e_monitoring_cog_snapshot_integration(tmp_path):
     async def run():
@@ -101,7 +106,9 @@ def test_e2e_monitoring_cog_snapshot_integration(tmp_path):
         tracker = ProcessTracker()
         metrics = MetricsCollector()
         i18n = LocalizationService("hu")
-        telemetry = TelemetryService(config=app_cfg, tracker=tracker, metrics_collector=metrics, i18n=i18n, start_time=datetime.datetime.now())
+        telemetry = TelemetryService(
+            config=app_cfg, tracker=tracker, metrics_collector=metrics, i18n=i18n, start_time=datetime.datetime.now()
+        )
 
         bot_mock = MagicMock()
         bot_mock.telemetry_service = telemetry

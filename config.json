@@ -134,19 +134,19 @@
         "1493035706056966365": {
             "name": "Discord MCP",
             "path": "/home/jupi/bots/discord-mcp-src",
-            "path_win": "",
+            "path_win": "E:\\projects\\repos\\bots\\discord-mcp-src",
             "cmd": "/home/jupi/.sdkman/candidates/java/current/bin/java -jar target/discord-mcp-1.0.0.jar",
-            "cmd_win": "",
-            "log": "",
+            "cmd_win": "java -jar target/discord-mcp-1.0.0.jar",
+            "log": "discord_mcp.log",
             "systemd_service": "discord-mcp.service"
         },
         "1493035706056966366": {
             "name": "Discord Copilot",
             "path": "/home/jupi/bots/discord-management-copilot",
-            "path_win": "",
+            "path_win": "E:\\projects\\repos\\bots\\discord-management-copilot",
             "cmd": ".venv/bin/python main_web.py",
-            "cmd_win": ".",
-            "log": "",
+            "cmd_win": "python main_web.py",
+            "log": "copilot.log",
             "systemd_service": "discord-ai-agent.service"
         }
     }

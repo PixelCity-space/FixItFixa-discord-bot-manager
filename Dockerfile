@@ -34,8 +34,10 @@ COPY --chown=appuser:appuser . .
 
 USER appuser
 
-# Healthcheck for container vitality
-HEALTHCHECK --interval=60s --timeout=10s --start-period=15s --retries=3 \
-  CMD python -c "import psutil; exit(0 if psutil.cpu_percent() >= 0 else 1)"
+EXPOSE 9090
+
+# Healthcheck for container vitality using manager HTTP health endpoint
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD python -c "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9090/health', timeout=4).getcode() == 200 else 1)"
 
 CMD ["python", "manager.py"]

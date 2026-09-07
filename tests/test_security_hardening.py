@@ -1,9 +1,10 @@
 import os
-import pytest
-from core.system.process_spawner import ProcessSpawner
-from core.system.git_client import GitClient
+
 from core.common.rate_limiter import InteractionRateLimiter
 from core.config.models import BotConfig
+from core.system.git_client import GitClient
+from core.system.process_spawner import ProcessSpawner
+
 
 def test_process_spawner_validate_command_blocks_dangerous_characters():
     # Dangerous commands
@@ -20,18 +21,16 @@ def test_process_spawner_validate_command_blocks_dangerous_characters():
     assert ProcessSpawner.validate_command("python -m bot.main --port 8080")[0]
     assert ProcessSpawner.validate_command("node server.js --env production")[0]
 
+
 def test_process_spawner_spawn_rejects_injected_command():
     spawner = ProcessSpawner()
     injected_bot = BotConfig(
-        id="evil_bot",
-        name="EvilBot",
-        path=".",
-        cmd="python app.py; cat /etc/passwd",
-        log="bot.log"
+        id="evil_bot", name="EvilBot", path=".", cmd="python app.py; cat /etc/passwd", log="bot.log"
     )
 
     pid = spawner.spawn(injected_bot, env={})
     assert pid is None
+
 
 def test_git_client_is_safe_ref_blocks_injection():
     # Dangerous refs
@@ -49,6 +48,7 @@ def test_git_client_is_safe_ref_blocks_injection():
     assert GitClient.is_safe_ref("HEAD@{1}")
     assert GitClient.is_safe_ref("tag_2026-08-26")
 
+
 def test_git_client_update_rejects_unsafe_branch(tmp_path):
     # Initialize a dummy git repo directory
     git_dir = tmp_path / ".git"
@@ -58,6 +58,7 @@ def test_git_client_update_rejects_unsafe_branch(tmp_path):
     success, msg, changed, details = client.update_repo(str(tmp_path), branch="main; rm -rf /")
     assert not success
     assert "rejected" in msg.lower()
+
 
 def test_interaction_rate_limiter_cooldown_and_reset():
     limiter = InteractionRateLimiter(default_cooldown=2.0)
@@ -79,8 +80,9 @@ def test_interaction_rate_limiter_cooldown_and_reset():
     limited, remaining = limiter.is_limited(user_id, action, cooldown=2.0)
     assert not limited
 
+
 def test_process_spawner_systemd_privileges_check():
     has_privs, msg = ProcessSpawner.check_systemd_privileges()
-    if os.name != 'posix':
+    if os.name != "posix":
         assert not has_privs
         assert "Linux/POSIX" in msg

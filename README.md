@@ -3,7 +3,7 @@
 [![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![Discord.py](https://img.shields.io/badge/discord.py-v2.3%2B-5865F2.svg?logo=discord&logoColor=white)](https://github.com/Rapptz/discord.py)
 [![Code Architecture](https://img.shields.io/badge/architecture-4--Layer%20Clean%20%2B%20DI-brightgreen.svg)]()
-[![Test Suite](https://img.shields.io/badge/tests-229%20passed%20(90%25%20cov)-success.svg)]()
+[![Test Suite](https://img.shields.io/badge/tests-289%20passed%20(80.7%25%20cov)-success.svg)]()
 [![Code Style](https://img.shields.io/badge/code%20style-ruff-000000.svg?logo=ruff&logoColor=white)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/type%20checker-mypy%20strict-informational.svg)](https://mypy-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -97,12 +97,13 @@ fixitfixa/
 │   ├── ARCHITECTURE.md           # Deep-dive architecture design guide
 │   └── API_REFERENCE.md          # Technical component & API reference
 │
-├── tests/                        # 229+ unit and integration test suite
+├── tests/                        # 289+ unit and integration test suite (>80% coverage)
 ├── .github/workflows/ci.yml      # Multi-OS & multi-version CI pipeline
 ├── Dockerfile                    # Multi-stage slim container definition
 ├── docker-compose.yml            # Container orchestration manifest
 ├── pyproject.toml                # Project metadata, Ruff & Mypy configuration
 ├── requirements.txt              # Pinned production dependencies
+├── requirements-dev.txt          # Development, testing & typing dependencies (mypy, pytest, ruff)
 └── manager.py                    # Application entrypoint
 ```
 
@@ -131,6 +132,7 @@ fixitfixa/
    ```bash
    docker compose up -d --build
    ```
+   > **Note**: FixItFixa exposes Prometheus metrics and live health monitoring on port `9090` (`http://localhost:9090/health`, `/metrics`). Managed child bot directories are mounted via `${BOTS_DIR:-./bots}:/bots`.
 
 ---
 
@@ -147,6 +149,8 @@ fixitfixa/
 3. **Install Dependencies**:
    ```bash
    pip install -r requirements.txt
+   # For development, static typing (mypy), and testing (pytest):
+   pip install -r requirements-dev.txt
    ```
 4. **Start FixItFixa**:
    ```bash

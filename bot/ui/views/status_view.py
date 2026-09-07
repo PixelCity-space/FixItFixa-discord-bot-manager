@@ -1,15 +1,19 @@
 import os
+
 import discord
-from discord.ui import LayoutView, ActionRow, Container, TextDisplay, Separator
+from discord.ui import ActionRow, Container, LayoutView, Separator, TextDisplay
+
+from bot.ui.components.buttons import BotControlButton, PageButton
 from core.icons import Icons
 from core.utils import get_feedback
-from bot.ui.components.buttons import BotControlButton, PageButton
+
 
 class StatusContainer(Container):
     """A visual container box for the status content (Paginated)."""
+
     def __init__(self, bot_manager, i18n, manager_stats, bots_stats, parent_view, page=0, page_size=3):
-        ui = getattr(bot_manager, 'ui_settings', {})
-        accent = ui.get("accent_color", 0x2b2d31)
+        ui = getattr(bot_manager, "ui_settings", {})
+        accent = ui.get("accent_color", 0x2B2D31)
         super().__init__(accent_color=accent)
 
         restart_emoji = Icons.RESTART
@@ -34,7 +38,9 @@ class StatusContainer(Container):
             server_up_label = get_feedback(i18n, "server_uptime")
 
             manager_text = (
-                f"**{bot_manager.manager_name}**" + (f" **{get_feedback(i18n, 'update_available')}**" if manager_stats.get("has_update") else "") + "\n"
+                f"**{bot_manager.manager_name}**"
+                + (f" **{get_feedback(i18n, 'update_available')}**" if manager_stats.get("has_update") else "")
+                + "\n"
                 f"**{get_feedback(i18n, 'status_running')}** | PID: `{os.getpid()}`\n"
                 f"{get_feedback(i18n, 'uptime')}: {manager_stats['uptime']} | {server_up_label}: {manager_stats['host_uptime']}\n"
                 f"{get_feedback(i18n, 'branch')}: `{manager_stats['branch']}` | {host_label}: `{manager_stats['os']}`\n"
@@ -44,7 +50,9 @@ class StatusContainer(Container):
             self.add_item(TextDisplay(manager_text))
 
             mgr_row = ActionRow()
-            mgr_row.add_item(BotControlButton(emoji=restart_emoji, bot_id="manager", action="restart", view=parent_view))
+            mgr_row.add_item(
+                BotControlButton(emoji=restart_emoji, bot_id="manager", action="restart", view=parent_view)
+            )
             mgr_row.add_item(BotControlButton(emoji=update_emoji, bot_id="manager", action="update", view=parent_view))
             mgr_row.add_item(BotControlButton(emoji=stop_emoji, bot_id="manager", action="stop", view=parent_view))
             self.add_item(mgr_row)
@@ -60,19 +68,22 @@ class StatusContainer(Container):
                 path_groups[path].append((b_id, b_info))
 
             group_list = list(path_groups.items())
+            num_groups = len(group_list)
+            total_pages = 1 if num_groups <= 2 else 1 + (num_groups - 2 + 3 - 1) // 3
 
             # Variable pagination: Page 0 has 2 items, other pages have 3 items
-            if page == 0:
+            safe_page = max(0, min(page, max(0, total_pages - 1)))
+            if safe_page == 0:
                 start_idx = 0
                 end_idx = 2
             else:
-                start_idx = 2 + (page - 1) * 3
+                start_idx = 2 + (safe_page - 1) * 3
                 end_idx = start_idx + 3
             paged_groups = group_list[start_idx:end_idx]
 
             for i, (path, members) in enumerate(paged_groups):
                 if i == 0:
-                    page_str = get_feedback(i18n, "page_indicator", page=page + 1)
+                    page_str = get_feedback(i18n, "page_indicator", page=safe_page + 1)
                     header = f"**{get_feedback(i18n, 'bots_status_header')} {page_str}**"
                     self.add_item(TextDisplay(header))
                     self.add_item(Separator())
@@ -87,13 +98,37 @@ class StatusContainer(Container):
 
                     cluster_row = ActionRow()
                     primary_id = members[0][0]
-                    cluster_row.add_item(BotControlButton(emoji=restart_emoji, bot_id=primary_id, bot_name=members[0][1]["name"], action="restart", view=parent_view))
-                    cluster_row.add_item(BotControlButton(emoji=update_emoji, bot_id=primary_id, bot_name=members[0][1]["name"], action="update", view=parent_view))
-                    cluster_row.add_item(BotControlButton(emoji=stop_emoji, bot_id=primary_id, bot_name=members[0][1]["name"], action="stop", view=parent_view))
+                    cluster_row.add_item(
+                        BotControlButton(
+                            emoji=restart_emoji,
+                            bot_id=primary_id,
+                            bot_name=members[0][1]["name"],
+                            action="restart",
+                            view=parent_view,
+                        )
+                    )
+                    cluster_row.add_item(
+                        BotControlButton(
+                            emoji=update_emoji,
+                            bot_id=primary_id,
+                            bot_name=members[0][1]["name"],
+                            action="update",
+                            view=parent_view,
+                        )
+                    )
+                    cluster_row.add_item(
+                        BotControlButton(
+                            emoji=stop_emoji,
+                            bot_id=primary_id,
+                            bot_name=members[0][1]["name"],
+                            action="stop",
+                            view=parent_view,
+                        )
+                    )
                     self.add_item(cluster_row)
 
                     member_details = []
-                    for m_id, m_info in members:
+                    for _m_id, m_info in members:
                         if m_info.get("is_running"):
                             stats = f"{cpu_label}: `{m_info['cpu']}%` | {ram_label}: `{int(m_info['ram'])}MB` | {log_label}: `{m_info['log_size']}`"
                         else:
@@ -109,9 +144,21 @@ class StatusContainer(Container):
                     self.add_item(TextDisplay(bot_header))
 
                     bot_row = ActionRow()
-                    bot_row.add_item(BotControlButton(emoji=restart_emoji, bot_id=b_id, bot_name=b_name, action="restart", view=parent_view))
-                    bot_row.add_item(BotControlButton(emoji=update_emoji, bot_id=b_id, bot_name=b_name, action="update", view=parent_view))
-                    bot_row.add_item(BotControlButton(emoji=stop_emoji, bot_id=b_id, bot_name=b_name, action="stop", view=parent_view))
+                    bot_row.add_item(
+                        BotControlButton(
+                            emoji=restart_emoji, bot_id=b_id, bot_name=b_name, action="restart", view=parent_view
+                        )
+                    )
+                    bot_row.add_item(
+                        BotControlButton(
+                            emoji=update_emoji, bot_id=b_id, bot_name=b_name, action="update", view=parent_view
+                        )
+                    )
+                    bot_row.add_item(
+                        BotControlButton(
+                            emoji=stop_emoji, bot_id=b_id, bot_name=b_name, action="stop", view=parent_view
+                        )
+                    )
                     self.add_item(bot_row)
 
                     if b_info.get("is_running"):
@@ -132,12 +179,14 @@ class StatusContainer(Container):
         else:
             self.add_item(TextDisplay(f"*{get_feedback(i18n, 'error_no_bots_configured')}*"))
 
+
 class ModernStatusView(LayoutView):
     """A modern status view for managed bots using Components V2 layout."""
+
     def __init__(self, bot_manager, i18n, manager_stats, bots_stats, current_page=0):
-        ui = getattr(bot_manager, 'ui_settings', {})
-        timeout = ui.get("view_timeout", 300)
-        super().__init__(timeout=timeout if timeout else None)
+        ui = getattr(bot_manager, "ui_settings", {})
+        timeout = ui.get("view_timeout", None) if isinstance(ui, dict) else getattr(ui, "view_timeout", None)
+        super().__init__(timeout=timeout)
         self.bot_manager = bot_manager
         self.i18n = i18n
 
@@ -151,10 +200,7 @@ class ModernStatusView(LayoutView):
 
         group_list = list(path_groups.items())
         num_groups = len(group_list)
-        if num_groups <= 2:
-            total_pages = 1
-        else:
-            total_pages = 1 + (num_groups - 2 + 3 - 1) // 3
+        total_pages = 1 if num_groups <= 2 else 1 + (num_groups - 2 + 3 - 1) // 3
         if total_pages == 0:
             total_pages = 1
 
@@ -166,7 +212,9 @@ class ModernStatusView(LayoutView):
 
             nav_row.add_item(PageButton(-1, cog, current_page, total_pages, i18n))
 
-            page_label = discord.ui.Button(style=discord.ButtonStyle.secondary, label=f"{current_page + 1} / {total_pages}", disabled=True)
+            page_label = discord.ui.Button(
+                style=discord.ButtonStyle.secondary, label=f"{current_page + 1} / {total_pages}", disabled=True
+            )
             nav_row.add_item(page_label)
 
             nav_row.add_item(PageButton(1, cog, current_page, total_pages, i18n))

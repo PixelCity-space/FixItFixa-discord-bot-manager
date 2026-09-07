@@ -1,19 +1,23 @@
-import os
 import asyncio
+import os
+from collections.abc import Callable
+
 import psutil
-from typing import List, Optional, Callable, Tuple
-from core.logger import log
-from core.config.models import BotConfig, AppConfig
+
+from core.config.models import AppConfig, BotConfig
 from core.interfaces.system import IProcessSpawner, IProcessTracker
+from core.logger import log
+
 
 class BotLifecycleService:
     """Orchestrates starting, stopping, and restarting child bot processes and clusters."""
+
     def __init__(
         self,
         config: AppConfig,
         spawner: IProcessSpawner,
         tracker: IProcessTracker,
-        notify_callback: Optional[Callable] = None
+        notify_callback: Callable | None = None,
     ):
         self.config = config
         self.spawner = spawner
@@ -25,18 +29,33 @@ class BotLifecycleService:
         env = os.environ.copy()
         for key in self.config.bot_settings.protected_env_vars:
             env.pop(key, None)
+
+        # Load child bot's local .env file if present in its directory
+        if bot_cfg.path:
+            bot_env_file = os.path.join(bot_cfg.path, ".env")
+            if os.path.isfile(bot_env_file):
+                try:
+                    from dotenv import dotenv_values
+
+                    local_vars = dotenv_values(bot_env_file)
+                    for k, v in local_vars.items():
+                        if k and v is not None and k not in self.config.bot_settings.protected_env_vars:
+                            env[k] = str(v)
+                except Exception as e:
+                    log.warning(f"[BotLifecycleService] Failed to read local .env for {bot_cfg.name}: {e}")
+
         env["MANAGED_LOGGING"] = "1"
         env["INSTANCE_NAME"] = bot_cfg.cmd.split()[-1] if bot_cfg.cmd else bot_cfg.name
         return env
 
-    def get_related_bots(self, bot_id: str) -> List[BotConfig]:
+    def get_related_bots(self, bot_id: str) -> list[BotConfig]:
         """Returns all bots sharing the same directory path (cluster)."""
         bot = self.config.bots.get(bot_id)
         if not bot:
             return []
         return [b for b in self.config.bots.values() if b.path == bot.path]
 
-    async def start_bot(self, bot_id: str) -> Optional[int]:
+    async def start_bot(self, bot_id: str) -> int | None:
         """Starts a single bot if not already running."""
         bot_cfg = self.config.bots.get(bot_id)
         if not bot_cfg:
@@ -51,7 +70,7 @@ class BotLifecycleService:
                     self.tracker.unregister(bot_id)
 
         # Linux systemd
-        if bot_cfg.systemd_service and os.name == 'posix':
+        if bot_cfg.systemd_service and os.name == "posix":
             success = self.spawner.start_service(bot_cfg.systemd_service)
             if success:
                 await asyncio.sleep(self.spawner.restart_wait)
@@ -69,17 +88,20 @@ class BotLifecycleService:
             self.tracker.clear_manual_stop(bot_id)
         return pid
 
-    async def stop_bot(self, bot_id: str, clean_rogue: bool = True) -> Tuple[bool, Optional[str]]:
+    async def stop_bot(self, bot_id: str, clean_rogue: bool = True) -> tuple[bool, str | None]:
         """Stops a single bot process and optionally cleans up rogue processes in its folder."""
         bot_cfg = self.config.bots.get(bot_id)
         if not bot_cfg:
             return False, f"Bot '{bot_id}' not found in configuration"
 
         # Linux systemd
-        if bot_cfg.systemd_service and os.name == 'posix':
+        if bot_cfg.systemd_service and os.name == "posix":
             stopped = await asyncio.to_thread(self.spawner.stop_service, bot_cfg.systemd_service)
             if not stopped:
-                err = getattr(self.spawner, 'last_error', None) or f"Failed to stop systemd service '{bot_cfg.systemd_service}'"
+                err = (
+                    getattr(self.spawner, "last_error", None)
+                    or f"Failed to stop systemd service '{bot_cfg.systemd_service}'"
+                )
                 log.error(f"[BotLifecycleService] Cannot stop systemd service for {bot_id}: {err}")
                 return False, err
 
@@ -89,7 +111,7 @@ class BotLifecycleService:
             try:
                 stopped = await self.spawner.terminate_process(proc)
                 if not stopped:
-                    err = getattr(self.spawner, 'last_error', None) or f"Failed to terminate process (PID {proc.pid})"
+                    err = getattr(self.spawner, "last_error", None) or f"Failed to terminate process (PID {proc.pid})"
                     log.error(f"[BotLifecycleService] Cannot terminate process for {bot_id}: {err}")
                     return False, err
             except (psutil.NoSuchProcess, psutil.ZombieProcess):
@@ -107,9 +129,9 @@ class BotLifecycleService:
         await asyncio.sleep(self.spawner.restart_wait)
         return True, None
 
-    async def restart_bot_cluster(self, bot_id: str) -> List[Tuple[BotConfig, Optional[int], Optional[str]]]:
+    async def restart_bot_cluster(self, bot_id: str) -> list[tuple[BotConfig, int | None, str | None]]:
         """Restarts the target bot and all related bots in the same folder.
-        
+
         Properly sequences cluster restarts:
         1. First, stops all bots sharing the directory and cleans rogue processes.
         2. Then, sequentially launches all bots in the cluster.
@@ -119,7 +141,7 @@ class BotLifecycleService:
             return []
 
         related = self.get_related_bots(bot_id)
-        results = []
+        results: list[tuple[BotConfig, int | None, str | None]] = []
 
         # 1. Stop all bots in the cluster first
         for b in related:
@@ -141,7 +163,7 @@ class BotLifecycleService:
                 if new_pid:
                     results.append((b, new_pid, None))
                 else:
-                    err = getattr(self.spawner, 'last_error', None) or "Failed to start bot process"
+                    err = getattr(self.spawner, "last_error", None) or "Failed to start bot process"
                     results.append((b, None, err))
             except Exception as e:
                 log.error(f"[BotLifecycleService] Error starting bot {b.name}: {e}")

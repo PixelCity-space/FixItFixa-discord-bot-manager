@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock
-from bot.ui.views.status_view import ModernStatusView
+
 from bot.ui.views.info_view import ModernInfoView
+from bot.ui.views.status_view import ModernStatusView
 from core.services.i18n_service import LocalizationService
+
 
 def test_modern_status_view_single_page():
     bot = MagicMock()
@@ -21,7 +23,7 @@ def test_modern_status_view_single_page():
         "swap": 10,
         "host_uptime": "5 napja",
         "net": "10 KB/s",
-        "has_update": False
+        "has_update": False,
     }
     bots_stats = {
         "b1": {
@@ -30,13 +32,37 @@ def test_modern_status_view_single_page():
             "status": "🔴 Nem fut",
             "is_running": False,
             "log_size": "10 KB",
-            "db_sizes": {}
+            "db_sizes": {},
         }
     }
 
     view = ModernStatusView(bot, i18n, mgr_stats, bots_stats, current_page=0)
     assert view is not None
+    assert view.timeout is None  # Persistent view has no expiry
     assert len(view.children) >= 1
+
+
+def test_modern_status_view_custom_timeout():
+    bot = MagicMock()
+    bot.ui_settings = {"view_timeout": 600}
+    i18n = LocalizationService("hu")
+    mgr_stats = {
+        "cpu": 0,
+        "ram": 0,
+        "uptime": "",
+        "branch": "",
+        "os": "",
+        "sys_cpu_free": 0,
+        "sys_ram_free": 0,
+        "sys_disk_free": 0,
+        "swap": 0,
+        "host_uptime": "",
+        "net": "",
+        "has_update": False,
+    }
+    view = ModernStatusView(bot, i18n, mgr_stats, {}, current_page=0)
+    assert view.timeout == 600
+
 
 def test_modern_status_view_multi_page_pagination():
     bot = MagicMock()
@@ -46,9 +72,18 @@ def test_modern_status_view_multi_page_pagination():
 
     i18n = LocalizationService("hu")
     mgr_stats = {
-        "cpu": 0, "ram": 50, "uptime": "1h", "branch": "main", "os": "Linux",
-        "sys_cpu_free": 50, "sys_ram_free": 1000, "sys_disk_free": 50, "swap": 0,
-        "host_uptime": "1d", "net": "1 KB/s", "has_update": False
+        "cpu": 0,
+        "ram": 50,
+        "uptime": "1h",
+        "branch": "main",
+        "os": "Linux",
+        "sys_cpu_free": 50,
+        "sys_ram_free": 1000,
+        "sys_disk_free": 50,
+        "swap": 0,
+        "host_uptime": "1d",
+        "net": "1 KB/s",
+        "has_update": False,
     }
     # 6 distinct paths -> requires multiple pages
     bots_stats = {
@@ -58,13 +93,14 @@ def test_modern_status_view_multi_page_pagination():
             "status": "🔴 Nem fut",
             "is_running": False,
             "log_size": "N/A",
-            "db_sizes": {}
+            "db_sizes": {},
         }
         for i in range(6)
     }
 
     view = ModernStatusView(bot, i18n, mgr_stats, bots_stats, current_page=0)
     assert view is not None
+
 
 def test_modern_info_view_structure():
     bot = MagicMock()
@@ -74,7 +110,7 @@ def test_modern_info_view_structure():
     bot.admin_role_id = 333
     bot.tester_role_id = 444
     bot.user = None
-    bot.ui_settings = {"accent_color": 0x2b2d31}
+    bot.ui_settings = {"accent_color": 0x2B2D31}
 
     i18n = LocalizationService("hu")
     view = ModernInfoView(bot, i18n)

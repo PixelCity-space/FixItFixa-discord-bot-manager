@@ -1,9 +1,11 @@
-import os
 import json
+import os
+
+from bot.client import BotManager
 from core.config.models import BotConfig
 from core.config.state_repository import StateRepository
 from core.system.process_tracker import ProcessTracker
-from bot.client import BotManager
+
 
 def test_e2e_reboot_state_recovery(tmp_path):
     # Simulate prior state with existing status message ID
@@ -18,26 +20,23 @@ def test_e2e_reboot_state_recovery(tmp_path):
 
     # Mutate and save state
     bot.save_state("status_message_id", "111222333")
-    
+
     # Verify disk persistence
     reloaded_state = json.loads(state_file.read_text(encoding="utf-8"))
     assert reloaded_state["status_message_id"] == "111222333"
 
+
 def test_e2e_process_discovery_on_boot():
     tracker = ProcessTracker()
 
-    bot_cfg = BotConfig(
-        id="current_self",
-        name="Self Process",
-        path=".",
-        cmd="python"
-    )
+    bot_cfg = BotConfig(id="current_self", name="Self Process", path=".", cmd="python")
     bots_dict = {"current_self": bot_cfg}
 
     # Discover alive processes matching cmd
     tracker.discover_processes(bots_dict)
     # The current running python pytest process is discovered or tracked
     assert isinstance(tracker.managed_processes, dict)
+
 
 def test_e2e_config_hot_reload_persistence(tmp_path):
     config_file = tmp_path / "config.json"
@@ -51,13 +50,7 @@ def test_e2e_config_hot_reload_persistence(tmp_path):
     # Save updated config with new bot
     new_config = {
         "guild_id": 11111,
-        "bots": {
-            "new_worker": {
-                "name": "New Dynamic Worker",
-                "path": str(tmp_path),
-                "cmd": "python worker.py"
-            }
-        }
+        "bots": {"new_worker": {"name": "New Dynamic Worker", "path": str(tmp_path), "cmd": "python worker.py"}},
     }
     bot.save_config(new_config)
 
@@ -68,6 +61,7 @@ def test_e2e_config_hot_reload_persistence(tmp_path):
     # Verify disk updated
     saved_disk_cfg = json.loads(config_file.read_text(encoding="utf-8"))
     assert "new_worker" in saved_disk_cfg["bots"]
+
 
 def test_e2e_state_repository_external_file_loss_recovery(tmp_path):
     state_file = tmp_path / "state.json"
@@ -84,3 +78,25 @@ def test_e2e_state_repository_external_file_loss_recovery(tmp_path):
     repo.set("session_key", "recovered_abc")
     assert state_file.exists()
     assert repo.get("session_key") == "recovered_abc"
+
+
+def test_state_repository_corrupted_json_and_save_errors(tmp_path):
+    from unittest.mock import patch
+
+    # 1. Corrupted json
+    state_file = tmp_path / "corrupt_state.json"
+    state_file.write_text("NOT_VALID_JSON{", encoding="utf-8")
+    repo = StateRepository(str(state_file))
+    assert repo.raw == {}
+
+    # 2. sync_disk = True
+    repo.set("key1", "val1")
+    assert repo.save(sync_disk=True) is True
+
+    # 3. PermissionError on save
+    with patch("os.replace", side_effect=PermissionError("Access denied")):
+        assert repo.save() is False
+
+    # 4. Generic Exception on save
+    with patch("os.replace", side_effect=RuntimeError("Disk failure")):
+        assert repo.save() is False
